@@ -7,6 +7,8 @@ add_library(DX
         DX/DXPipelineConfig.h
         DX/VertexFormats.cpp
         DX/VertexFormats.h
+        DX/DXBuffer.cpp
+        DX/DXBuffer.h
 )
 target_include_directories(DX PUBLIC DX)
 target_link_libraries(DX PUBLIC

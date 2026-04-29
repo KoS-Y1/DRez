@@ -4,6 +4,7 @@
 
 #include "DXApp.h"
 
+#include <span>
 #include <string>
 
 #include <directx/d3dx12.h>
@@ -15,7 +16,6 @@
 // TODO: delete
 #include "VertexFormats.h"
 
-#include <span>
 
 using Microsoft::WRL::ComPtr;
 
@@ -222,50 +222,29 @@ DXApp::DXApp(HWND hwnd) {
             VertexPT2D({-1.0f, 1.0f}, {0.0f, 1.0f}),
             VertexPT2D({1.0f, 1.0f}, {1.0f, 1.0f}),
         };
-        const uint32_t size = std::span<VertexPT2D>(vertices).size_bytes();
+        const uint64_t size = std::span<VertexPT2D>(vertices).size_bytes();
 
-        ComPtr<ID3D12Resource>  stagingBuffer{};
-        CD3DX12_HEAP_PROPERTIES heapProperties{D3D12_HEAP_TYPE_UPLOAD};
-        auto                    bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-        result                             = m_device->CreateCommittedResource(
-            &heapProperties,
-            D3D12_HEAP_FLAG_NONE,
-            &bufferDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(&stagingBuffer)
-        );
-        DebugCheckCritical(SUCCEEDED(result), "Failed to create staging buffer for vertex buffer, error 0x{:x}", static_cast<uint32_t>(result));
+        DXBuffer stagingBuffer{*this, D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "stagingBuffer"};
+        m_vertexBuffer = DXBuffer(*this, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "vertexBuffer");
 
 
-        heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-        result         = m_device->CreateCommittedResource(
-            &heapProperties,
-            D3D12_HEAP_FLAG_NONE,
-            &bufferDesc,
-            D3D12_RESOURCE_STATE_COMMON,
-            nullptr,
-            IID_PPV_ARGS(&m_vertexBuffer)
-        );
-        DebugCheckCritical(SUCCEEDED(result), "Failed to create vertex buffer, error 0x{:x}", static_cast<uint32_t>(result));
+        ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {
+            D3D12_SUBRESOURCE_DATA data{};
+            data.pData      = reinterpret_cast<uint8_t *>(vertices.data());
+            data.RowPitch   = size;
+            data.SlicePitch = size;
 
-        D3D12_SUBRESOURCE_DATA data{};
-        data.pData      = reinterpret_cast<uint8_t *>(vertices.data());
-        data.RowPitch   = size;
-        data.SlicePitch = size;
-
-        ImmediateSubmit([&](const ComPtr<ID3D12GraphicsCommandList> &commandList) {
-            UpdateSubresources<1>(commandList.Get(), m_vertexBuffer.Get(), stagingBuffer.Get(), 0, 0, 1, &data);
+            UpdateSubresources<1>(commandList, m_vertexBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
 
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-                m_vertexBuffer.Get(),
+                m_vertexBuffer.GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
                 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
             );
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+        m_vertexBufferView.BufferLocation = m_vertexBuffer.GetGPUVirtualAddress();
         m_vertexBufferView.StrideInBytes  = sizeof(VertexPT2D);
         m_vertexBufferView.SizeInBytes    = size;
     }
@@ -277,15 +256,15 @@ DXApp::~DXApp() {
 
 DXApp::FrameInfo DXApp::BeginFrame() {
     WaitForFence(m_fenceValues[m_frameIndex]);
-    ResetCommand(m_commandAllocators[m_frameIndex], m_commandLists[m_frameIndex]);
+    ResetCommand(m_commandAllocators[m_frameIndex].Get(), m_commandLists[m_frameIndex].Get());
 
     AcquireNextFrame();
 
-    return FrameInfo{.commandList = m_commandLists[m_frameIndex]};
+    return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get()};
 }
 
 void DXApp::EndFrame() {
-    SubmitToQueue(m_commandLists[m_frameIndex]);
+    SubmitToQueue(m_commandLists[m_frameIndex].Get());
 
     HRESULT result = m_swapchain->Present(1, 0);
     DebugCheckCritical(SUCCEEDED(result), "Failed to present, error 0x{:x}", static_cast<uint32_t>(result));
@@ -295,12 +274,12 @@ void DXApp::EndFrame() {
 }
 
 void DXApp::Run() {
-    FrameInfo                          frameInfo   = BeginFrame();
-    ComPtr<ID3D12GraphicsCommandList> &commandList = frameInfo.commandList;
+    FrameInfo                  frameInfo   = BeginFrame();
+    ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
 
     // TODO: render
-    commandList->SetGraphicsRootSignature(m_gfx.GetRootSignature().Get());
-    commandList->SetPipelineState(m_gfx.GetPipelineState().Get());
+    commandList->SetGraphicsRootSignature(m_gfx.GetRootSignature());
+    commandList->SetPipelineState(m_gfx.GetPipelineState());
     commandList->RSSetViewports(1, &m_viewport);
     commandList->RSSetScissorRects(1, &m_rect);
 
@@ -335,11 +314,11 @@ void DXApp::Run() {
     EndFrame();
 }
 
-void DXApp::ResetCommand(ComPtr<ID3D12CommandAllocator> &commandAllocator, ComPtr<ID3D12GraphicsCommandList> &commandList) {
+void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {
     HRESULT result = commandAllocator->Reset();
     DebugCheckCritical(SUCCEEDED(result), "Failed to reset command allocator, error 0x{:x}", static_cast<uint32_t>(result));
 
-    result = commandList->Reset(commandAllocator.Get(), nullptr);
+    result = commandList->Reset(commandAllocator, nullptr);
     DebugCheckCritical(SUCCEEDED(result), "Failed to reset command list, error 0x{:x}", static_cast<uint32_t>(result));
 }
 
@@ -350,12 +329,12 @@ uint64_t DXApp::SignalQueue() {
     return m_nextFenceValue;
 }
 
-void DXApp::SubmitToQueue(ComPtr<ID3D12GraphicsCommandList> &commandList) {
+void DXApp::SubmitToQueue(ID3D12GraphicsCommandList *commandList) {
     HRESULT result = commandList->Close();
     DebugCheckCritical(SUCCEEDED(result), "Failed to close command list, error 0x{:x}", static_cast<uint32_t>(result));
 
-    const std::vector<ID3D12CommandList *> lists{commandList.Get()};
-    m_commandQueue->ExecuteCommandLists(lists.size(), lists.data());
+    ID3D12CommandList *lists[] = {commandList};
+    m_commandQueue->ExecuteCommandLists(1, lists);
 }
 
 void DXApp::AcquireNextFrame() {

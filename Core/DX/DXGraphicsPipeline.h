@@ -24,9 +24,9 @@ public:
 
     ~DXGraphicsPipeline() = default;
 
-    [[nodiscard]] const Microsoft::WRL::ComPtr<ID3D12RootSignature> &GetRootSignature() { return m_rootSignature; }
+    [[nodiscard]] ID3D12RootSignature *GetRootSignature() const { return m_rootSignature.Get(); }
 
-    [[nodiscard]] const Microsoft::WRL::ComPtr<ID3D12PipelineState> &GetPipelineState() { return m_pipelineState; }
+    [[nodiscard]] ID3D12PipelineState *GetPipelineState() const { return m_pipelineState.Get(); }
 
 private:
     std::string m_name;

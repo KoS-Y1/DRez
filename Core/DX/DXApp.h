@@ -14,12 +14,15 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
+// TODO: delete following
+#include "DXBuffer.h"
+
 class DXApp {
 public:
     static constexpr uint32_t kMaxFramesInFlight{2};
 
     struct FrameInfo {
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
+        ID3D12GraphicsCommandList *commandList;
     };
 
 public:
@@ -39,7 +42,7 @@ public:
     // TODO: remove later
     void Run();
 
-    [[nodiscard]] const Microsoft::WRL::ComPtr<ID3D12Device> &GetDevice() const { return m_device; }
+    [[nodiscard]] ID3D12Device *GetDevice() const { return m_device.Get(); }
 
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
@@ -58,23 +61,20 @@ private:
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_immediateCommandAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_immediateCommandList;
 
-    void ResetCommand(
-        Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    &commandAllocator,
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList
-    );
+    void ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList);
 
     uint64_t SignalQueue();
-    void     SubmitToQueue(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> &commandList);
+    void     SubmitToQueue(ID3D12GraphicsCommandList *commandList);
 
     template<class Func>
     void ImmediateSubmit(Func &&func) {
         std::scoped_lock<std::mutex> lock(m_immediateMutes);
 
-        ResetCommand(m_immediateCommandAllocator, m_immediateCommandList);
+        ResetCommand(m_immediateCommandAllocator.Get(), m_immediateCommandList.Get());
 
-        func(m_immediateCommandList);
+        func(m_immediateCommandList.Get());
 
-        SubmitToQueue(m_immediateCommandList);
+        SubmitToQueue(m_immediateCommandList.Get());
 
         WaitForFence(SignalQueue());
     }
@@ -101,9 +101,9 @@ private:
     void WaitForFence(uint64_t fenceValue, uint64_t timeout = kPointOneSecond);
 
     // TODO: testing
-    DXGraphicsPipeline                     m_gfx;
-    CD3DX12_VIEWPORT                       m_viewport{};
-    CD3DX12_RECT                           m_rect{};
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer{};
-    D3D12_VERTEX_BUFFER_VIEW               m_vertexBufferView{};
+    DXGraphicsPipeline       m_gfx;
+    CD3DX12_VIEWPORT         m_viewport{};
+    CD3DX12_RECT             m_rect{};
+    DXBuffer                 m_vertexBuffer{};
+    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView{};
 };
