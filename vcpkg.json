@@ -1,0 +1,27 @@
+{
+  "name" : "drez",
+  "version" : "0.1.0",
+  "builtin-baseline" : "d46283cf33cf5de7bd88e12156ce03882be1f179",
+  "dependencies" : [ {
+    "name" : "sdl3",
+    "version>=" : "3.4.4"
+  }, {
+    "name" : "shader-slang",
+    "version>=" : "2026.5"
+  }, {
+    "name" : "simdjson",
+    "version>=" : "4.6.3"
+  }, {
+    "name" : "spdlog",
+    "version>=" : "1.17.0"
+  }, {
+    "name" : "imgui",
+    "version>=" : "1.92.7"
+  }, {
+    "name" : "directx-headers",
+    "version>=" : "1.619.1"
+  }, {
+    "name" : "directxmath",
+    "version>=" : "2026-03-12"
+  } ]
+}
