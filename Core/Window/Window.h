@@ -25,6 +25,8 @@ public:
 
     void Run();
 
+    [[nodiscard]] DXApp *GetDXApp() const { return m_dxApp.get(); }
+
 private:
     SDL_Window *m_window{};
     int         m_width{};

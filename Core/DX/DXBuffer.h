@@ -28,6 +28,8 @@ public:
 
     [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const { return m_buffer->GetGPUVirtualAddress(); }
 
+    [[nodiscard]] std::string_view GetName() const { return m_name; }
+
 private:
     std::string                            m_name{};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_buffer;

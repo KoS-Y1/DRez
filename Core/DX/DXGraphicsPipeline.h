@@ -28,6 +28,8 @@ public:
 
     [[nodiscard]] ID3D12PipelineState *GetPipelineState() const { return m_pipelineState.Get(); }
 
+    [[nodiscard]] std::string_view GetName() const { return m_name; }
+
 private:
     std::string m_name;
 

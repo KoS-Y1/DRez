@@ -25,9 +25,14 @@ add_library(Files
         Files/FileSystem.cpp
         Files/FileSystem.h
         Files/JsonFile.h
+        Files/GltfLoader.cpp
+        Files/GltfLoader.h
 )
 target_include_directories(Files PUBLIC Files)
 target_link_libraries(Files PUBLIC
         simdjson::simdjson
+        Stb
+        fastgltf::fastgltf
         Debug
+        Shader
 )

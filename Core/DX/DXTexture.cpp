@@ -2,7 +2,7 @@
 // Created by y1 on 2026-04-29.
 //
 
-#include "DXTexture.h"
+#include "../DX/DXTexture.h"
 
 #include <directx/d3dx12_core.h>
 
@@ -19,7 +19,7 @@ DXTexture::DXTexture(
     uint32_t                  formatSize,
     D3D12_RESOURCE_FLAGS      resourceFlags,
     D3D12_HEAP_FLAGS          heapFlags,
-    D3D12_STATIC_SAMPLER_DESC sampler,
+    D3D12_SAMPLER_DESC        sampler,
     const void               *data,
     std::string               name
 )
@@ -47,7 +47,7 @@ DXTexture::DXTexture(
             .SlicePitch = static_cast<int64_t>(formatSize * width * height),
         };
 
-        DXBuffer stagingBuffer = app.CreaetBuffer(
+        DXBuffer stagingBuffer = app.CreateBuffer(
             D3D12_HEAP_TYPE_UPLOAD,
             D3D12_HEAP_FLAG_NONE,
             D3D12_RESOURCE_STATE_GENERIC_READ,

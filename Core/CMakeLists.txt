@@ -11,6 +11,8 @@ add_library(DX
         DX/DXBuffer.h
         DX/DXTexture.cpp
         DX/DXTexture.h
+        DX/DXUtils.cpp
+        DX/DXUtils.h
 )
 target_include_directories(DX PUBLIC DX)
 target_link_libraries(DX PUBLIC
@@ -45,4 +47,28 @@ target_link_libraries(ShaderCompiler PUBLIC
         Utils
         Files
         Debug
+)
+
+add_library(Rendering
+        Rendering/Renderer.cpp
+        Rendering/Renderer.h
+)
+target_include_directories(Rendering PUBLIC Rendering)
+target_link_libraries(Rendering PUBLIC
+        DX
+)
+
+add_library(Resources
+        Resources/ResourceManager.cpp
+        Resources/ResourceManager.h
+)
+target_include_directories(Resources PUBLIC Resources)
+target_link_libraries(Resources PUBLIC
+        fastgltf::fastgltf
+        Debug
+        ThreadPool
+        Utils
+        Files
+        DX
+        Shader
 )

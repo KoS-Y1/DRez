@@ -16,7 +16,7 @@
 ShaderCompiler::ShaderCompiler() {
     slang::createGlobalSession(m_globalSession.writeRef());
 
-    slang::TargetDesc target{
+    const slang::TargetDesc target{
         .format  = SLANG_DXIL,
         .profile = m_globalSession->findProfile("sm_6_3"),
     };
@@ -31,11 +31,17 @@ ShaderCompiler::ShaderCompiler() {
         {slang::CompilerOptionName::DebugInformation, {slang::CompilerOptionValueKind::Int, kDebugInfo}},
     };
 
-    slang::SessionDesc session{
+    const std::vector<slang::PreprocessorMacroDesc> macros{
+        {.name = "SLANG_PUBLIC", .value = "public"},
+    };
+
+    const slang::SessionDesc session{
         .targets                  = &target,
         .targetCount              = 1,
         .searchPaths              = &kShaderSearchPath,
         .searchPathCount          = 1,
+        .preprocessorMacros       = macros.data(),
+        .preprocessorMacroCount   = static_cast<uint32_t>(macros.size()),
         .compilerOptionEntries    = options.data(),
         .compilerOptionEntryCount = static_cast<uint32_t>(options.size()),
     };
@@ -43,8 +49,8 @@ ShaderCompiler::ShaderCompiler() {
 
     // Preload every shader
     {
-        JsonFile json{kLoadFile};
-        auto     keys = json.Get<std::vector<std::string>>("shaders");
+        const JsonFile json{kLoadFile};
+        const auto     keys = json.Get<std::vector<std::string>>("shaders");
 
         for (const auto &key: keys) {
             DebugCheckCritical(Compile(key), "Shader Compiler preloading, failed to load {}", key);
@@ -53,7 +59,7 @@ ShaderCompiler::ShaderCompiler() {
 }
 
 const std::unordered_map<SlangStage, Slang::ComPtr<ISlangBlob>> &ShaderCompiler::GetEntryPoints(const std::string &filePath) const {
-    auto pair = m_entryPoints.find(filePath);
+    const auto pair = m_entryPoints.find(filePath);
     DebugCheckCritical(pair != m_entryPoints.end(), "Failed to get entry points from {}", filePath);
     return pair->second;
 }

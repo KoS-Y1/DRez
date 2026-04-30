@@ -14,8 +14,8 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
-// TODO: delete following
 #include "DXBuffer.h"
+#include "DXTexture.h"
 
 class DXApp {
 public:
@@ -60,7 +60,7 @@ public:
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
 
-    [[nodiscard]] DXBuffer CreaetBuffer(
+    [[nodiscard]] DXBuffer CreateBuffer(
         D3D12_HEAP_TYPE       heapType,
         D3D12_HEAP_FLAGS      flags,
         D3D12_RESOURCE_STATES states,
@@ -70,6 +70,19 @@ public:
         return DXBuffer{*this, heapType, flags, states, size, name};
     }
 
+    [[nodiscard]] DXTexture CreateTexture(
+        uint64_t                  width,
+        uint32_t                  height,
+        DXGI_FORMAT               format,
+        uint32_t                  formatSize,
+        D3D12_RESOURCE_FLAGS      resourceFlags,
+        D3D12_HEAP_FLAGS          heapFlags,
+        D3D12_SAMPLER_DESC        sampler,
+        const void               *data,
+        std::string               name
+    ) {
+        return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, sampler, data, name};
+    }
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
