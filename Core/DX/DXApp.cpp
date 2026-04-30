@@ -227,13 +227,12 @@ DXApp::DXApp(HWND hwnd) {
         DXBuffer stagingBuffer{*this, D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "stagingBuffer"};
         m_vertexBuffer = DXBuffer(*this, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "vertexBuffer");
 
+        D3D12_SUBRESOURCE_DATA data{};
+        data.pData      = reinterpret_cast<uint8_t *>(vertices.data());
+        data.RowPitch   = size;
+        data.SlicePitch = size;
 
         ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {
-            D3D12_SUBRESOURCE_DATA data{};
-            data.pData      = reinterpret_cast<uint8_t *>(vertices.data());
-            data.RowPitch   = size;
-            data.SlicePitch = size;
-
             UpdateSubresources<1>(commandList, m_vertexBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
 
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -277,7 +276,6 @@ void DXApp::Run() {
     FrameInfo                  frameInfo   = BeginFrame();
     ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
 
-    // TODO: render
     commandList->SetGraphicsRootSignature(m_gfx.GetRootSignature());
     commandList->SetPipelineState(m_gfx.GetPipelineState());
     commandList->RSSetViewports(1, &m_viewport);

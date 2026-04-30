@@ -42,10 +42,34 @@ public:
     // TODO: remove later
     void Run();
 
+    template<class Func>
+    void ImmediateSubmit(Func &&func) {
+        std::scoped_lock<std::mutex> lock(m_immediateMutes);
+
+        ResetCommand(m_immediateCommandAllocator.Get(), m_immediateCommandList.Get());
+
+        func(m_immediateCommandList.Get());
+
+        SubmitToQueue(m_immediateCommandList.Get());
+
+        WaitForFence(SignalQueue());
+    }
+
     [[nodiscard]] ID3D12Device *GetDevice() const { return m_device.Get(); }
 
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
+
+    [[nodiscard]] DXBuffer CreaetBuffer(
+        D3D12_HEAP_TYPE       heapType,
+        D3D12_HEAP_FLAGS      flags,
+        D3D12_RESOURCE_STATES states,
+        uint64_t              size,
+        std::string           name
+    ) {
+        return DXBuffer{*this, heapType, flags, states, size, name};
+    }
+
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -66,18 +90,6 @@ private:
     uint64_t SignalQueue();
     void     SubmitToQueue(ID3D12GraphicsCommandList *commandList);
 
-    template<class Func>
-    void ImmediateSubmit(Func &&func) {
-        std::scoped_lock<std::mutex> lock(m_immediateMutes);
-
-        ResetCommand(m_immediateCommandAllocator.Get(), m_immediateCommandList.Get());
-
-        func(m_immediateCommandList.Get());
-
-        SubmitToQueue(m_immediateCommandList.Get());
-
-        WaitForFence(SignalQueue());
-    }
 
 private:
     // Swapchain

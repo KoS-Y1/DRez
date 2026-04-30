@@ -9,6 +9,8 @@ add_library(DX
         DX/VertexFormats.h
         DX/DXBuffer.cpp
         DX/DXBuffer.h
+        DX/DXTexture.cpp
+        DX/DXTexture.h
 )
 target_include_directories(DX PUBLIC DX)
 target_link_libraries(DX PUBLIC
