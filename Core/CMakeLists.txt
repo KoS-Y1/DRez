@@ -24,6 +24,8 @@ target_link_libraries(DX PUBLIC
         Debug
         Files
         ShaderCompiler
+        # TODO: delete
+        Resources
 )
 
 add_library(Window

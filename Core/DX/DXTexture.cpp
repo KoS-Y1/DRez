@@ -2,14 +2,13 @@
 // Created by y1 on 2026-04-29.
 //
 
-#include "../DX/DXTexture.h"
+#include "DXTexture.h"
 
-#include <directx/d3dx12_core.h>
+#include <directx/d3dx12.h>
 
 #include "DXApp.h"
 #include "Debug.h"
 
-#include <directx/d3dx12_resource_helpers.h>
 
 DXTexture::DXTexture(
     DXApp                    &app,
@@ -24,6 +23,7 @@ DXTexture::DXTexture(
     std::string               name
 )
     : m_name(std::move(name))
+    , m_format(format)
     , m_sampler(std::move(sampler)) {
     D3D12_RESOURCE_DESC desc{
         .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
@@ -57,6 +57,13 @@ DXTexture::DXTexture(
 
         app.ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {
             UpdateSubresources(commandList, m_texture.Get(), stagingBuffer.GetBuffer(), 0, 0, 1, &textureData);
+
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                m_texture.Get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            );
+            commandList->ResourceBarrier(1, &barrier);
         });
     }
 }

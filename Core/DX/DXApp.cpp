@@ -14,6 +14,7 @@
 #include "Debug.h"
 
 // TODO: delete
+#include "ResourceManager.h"
 #include "VertexFormats.h"
 
 
@@ -114,7 +115,7 @@ DXApp::DXApp(HWND hwnd) {
 
     // Command queue, per-frame allocators and command lists
     {
-        D3D12_COMMAND_QUEUE_DESC desc{.Type = D3D12_COMMAND_LIST_TYPE_DIRECT, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE};
+        const D3D12_COMMAND_QUEUE_DESC desc{.Type = D3D12_COMMAND_LIST_TYPE_DIRECT, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE};
         result = m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_commandQueue));
         DebugCheckCritical(SUCCEEDED(result), "Failed to create command queue, error 0x{:x}", static_cast<uint32_t>(result));
 
@@ -161,7 +162,7 @@ DXApp::DXApp(HWND hwnd) {
 
     // Swapchain
     {
-        DXGI_MODE_DESC bufferDesc{.Width = extent.width, .Height = extent.height, .Format = kPresentFormat};
+        const DXGI_MODE_DESC bufferDesc{.Width = extent.width, .Height = extent.height, .Format = kPresentFormat};
 
         DXGI_SWAP_CHAIN_DESC swapchainDesc{
             .BufferDesc   = bufferDesc,
@@ -184,7 +185,7 @@ DXApp::DXApp(HWND hwnd) {
         DebugCheckCritical(SUCCEEDED(result), "Failed to make window association, error 0x{:x}", static_cast<uint32_t>(result));
     }
 
-    // Descriptor heaps for render target view
+    // Descriptor heaps
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc{
             .Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
@@ -196,6 +197,18 @@ DXApp::DXApp(HWND hwnd) {
         DebugCheckCritical(SUCCEEDED(result), "Failed to create render target view descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
 
         m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+        desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.NumDescriptors = 1024;
+        desc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        result              = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_descriptorHeap));
+        DebugCheckCritical(SUCCEEDED(result), "Failed to create descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
+        m_descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+        result    = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_samplerHeap));
+        DebugCheckCritical(SUCCEEDED(result), "Failed to create sampler descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
+        m_samplerDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     }
 
     // Frame resources
@@ -259,6 +272,9 @@ DXApp::FrameInfo DXApp::BeginFrame() {
 
     AcquireNextFrame();
 
+    const std::vector<ID3D12DescriptorHeap *> heaps{m_descriptorHeap.Get(), m_samplerHeap.Get()};
+    m_commandLists[m_frameIndex]->SetDescriptorHeaps(heaps.size(), heaps.data());
+
     return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get()};
 }
 
@@ -273,13 +289,33 @@ void DXApp::EndFrame() {
 }
 
 void DXApp::Run() {
+    if (!m_resourcesBound) {
+        const DXTexture &tex = ResourceManager::GetInstance().GetTexture(0);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+            .Format                  = tex.GetFormat(),
+            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D               = {.MostDetailedMip = 0, .MipLevels = 1, .ResourceMinLODClamp = 0.0f}
+        };
+        m_device->CreateShaderResourceView(tex.GetResource(), &srvDesc, m_descriptorHeap->GetCPUDescriptorHandleForHeapStart());
+
+        D3D12_SAMPLER_DESC samplerDesc = tex.GetSampler();
+        m_device->CreateSampler(&samplerDesc, m_samplerHeap->GetCPUDescriptorHandleForHeapStart());
+
+        m_resourcesBound = true;
+    }
+
     FrameInfo                  frameInfo   = BeginFrame();
     ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
 
     commandList->SetGraphicsRootSignature(m_gfx.GetRootSignature());
     commandList->SetPipelineState(m_gfx.GetPipelineState());
+    commandList->SetGraphicsRootDescriptorTable(0, m_descriptorHeap->GetGPUDescriptorHandleForHeapStart()); // t0
+    commandList->SetGraphicsRootDescriptorTable(1, m_samplerHeap->GetGPUDescriptorHandleForHeapStart());    // s0
     commandList->RSSetViewports(1, &m_viewport);
     commandList->RSSetScissorRects(1, &m_rect);
+
 
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_renderTargets[m_backBufferIndex].Get(),
@@ -331,8 +367,8 @@ void DXApp::SubmitToQueue(ID3D12GraphicsCommandList *commandList) {
     HRESULT result = commandList->Close();
     DebugCheckCritical(SUCCEEDED(result), "Failed to close command list, error 0x{:x}", static_cast<uint32_t>(result));
 
-    ID3D12CommandList *lists[] = {commandList};
-    m_commandQueue->ExecuteCommandLists(1, lists);
+    const std::vector<ID3D12CommandList *> lists{commandList};
+    m_commandQueue->ExecuteCommandLists(lists.size(), lists.data());
 }
 
 void DXApp::AcquireNextFrame() {

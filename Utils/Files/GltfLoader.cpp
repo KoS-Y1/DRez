@@ -221,7 +221,7 @@ D3D12_SAMPLER_DESC LoadSampler(const fastgltf::Sampler &sampler) {
         .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         .MipLODBias     = 0.0f,
         .MaxAnisotropy  = 1u,
-        .ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+        .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
         .MinLOD         = 0.0f,
         .MaxLOD         = D3D12_FLOAT32_MAX
     };

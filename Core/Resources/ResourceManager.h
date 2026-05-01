@@ -70,6 +70,8 @@ public:
     [[nodiscard]] const DXBuffer &GetGltfBuffer(uint32_t handle) const { return m_gltfBuffers[handle]; }
 
     // [[nodiscard]] const shader_io::SkyboxMaterialInfo &GetSkyboxMaterial() const { return m_skyboxMaterial; }
+    // TODO: testing, delete
+    [[nodiscard]] const DXTexture &GetTexture(uint32_t handle) const { return m_textures[handle]; }
 
 
 protected:

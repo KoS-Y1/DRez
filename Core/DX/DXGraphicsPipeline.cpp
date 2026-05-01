@@ -22,16 +22,37 @@ DXGraphicsPipeline::DXGraphicsPipeline(DXApp &app, std::string_view filePath) {
     {
         // TODO: extract descriptor layout here
 
-        CD3DX12_ROOT_SIGNATURE_DESC desc;
-        desc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        CD3DX12_DESCRIPTOR_RANGE1 t0{};
+        t0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+        CD3DX12_DESCRIPTOR_RANGE1 s0{};
+        s0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
+
+        std::vector<CD3DX12_ROOT_PARAMETER1> rootParams{};
+        rootParams.emplace_back();
+        rootParams.back().InitAsDescriptorTable(1, &t0, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParams.emplace_back();
+        rootParams.back().InitAsDescriptorTable(1, &s0, D3D12_SHADER_VISIBILITY_PIXEL);
+
+        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};
+        desc.Init_1_1(rootParams.size(), rootParams.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
         ComPtr<ID3DBlob> signature{};
         ComPtr<ID3DBlob> error{};
-        HRESULT          result = D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
-        DebugCheckCritical(SUCCEEDED(result), "Graphics pipeline {}: failed to serialize signature, error 0x{:x}", m_name, static_cast<uint32_t>(result));
+        HRESULT          result = D3DX12SerializeVersionedRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error);
+        DebugCheckCritical(
+            SUCCEEDED(result),
+            "Graphics pipeline {}: failed to serialize signature, error 0x{:x}",
+            m_name,
+            static_cast<uint32_t>(result)
+        );
 
         result = app.GetDevice()->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
-        DebugCheckCritical(SUCCEEDED(result), "Graphics pipeline {}: failed to create rootSignature, error 0x{:x}", m_name, static_cast<uint32_t>(result));
+        DebugCheckCritical(
+            SUCCEEDED(result),
+            "Graphics pipeline {}: failed to create rootSignature, error 0x{:x}",
+            m_name,
+            static_cast<uint32_t>(result)
+        );
     }
 
     // Create pipeline
@@ -70,6 +91,11 @@ DXGraphicsPipeline::DXGraphicsPipeline(DXApp &app, std::string_view filePath) {
         }
 
         HRESULT result = app.GetDevice()->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&m_pipelineState));
-        DebugCheckCritical(SUCCEEDED(result), "Graphics pipeline {}: failed to create graphics pipeline state, error 0x{:x}", m_name, static_cast<uint32_t>(result));
+        DebugCheckCritical(
+            SUCCEEDED(result),
+            "Graphics pipeline {}: failed to create graphics pipeline state, error 0x{:x}",
+            m_name,
+            static_cast<uint32_t>(result)
+        );
     }
 }

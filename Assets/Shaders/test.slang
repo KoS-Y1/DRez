@@ -10,6 +10,9 @@ struct VSOut
     float2 uv : TEXCOORD0;
 }
 
+Texture2D texture : register(t0);
+SamplerState sampler : register(s0);
+
 [shader("vertex")]
 VSOut vertexMain(VSIn input)
 {
@@ -19,5 +22,5 @@ VSOut vertexMain(VSIn input)
 [shader("pixel")]
 float4 pixelMain(VSOut input) : SV_Target
 {
-    return float4(0.0f, 0.0f, 1.0f, 1.0f);
+    return texture.Sample(sampler, input.uv);
 }

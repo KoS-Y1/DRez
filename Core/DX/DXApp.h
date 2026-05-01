@@ -71,15 +71,15 @@ public:
     }
 
     [[nodiscard]] DXTexture CreateTexture(
-        uint64_t                  width,
-        uint32_t                  height,
-        DXGI_FORMAT               format,
-        uint32_t                  formatSize,
-        D3D12_RESOURCE_FLAGS      resourceFlags,
-        D3D12_HEAP_FLAGS          heapFlags,
-        D3D12_SAMPLER_DESC        sampler,
-        const void               *data,
-        std::string               name
+        uint64_t             width,
+        uint32_t             height,
+        DXGI_FORMAT          format,
+        uint32_t             formatSize,
+        D3D12_RESOURCE_FLAGS resourceFlags,
+        D3D12_HEAP_FLAGS     heapFlags,
+        D3D12_SAMPLER_DESC   sampler,
+        const void          *data,
+        std::string          name
     ) {
         return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, sampler, data, name};
     }
@@ -105,12 +105,20 @@ private:
 
 
 private:
-    // Swapchain
+    // Resources
     Microsoft::WRL::ComPtr<IDXGISwapChain3>                                m_swapchain{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>                           m_rtvHeap{};
     uint32_t                                                               m_rtvDescriptorSize{};
     uint32_t                                                               m_backBufferIndex{};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kMaxFramesInFlight> m_renderTargets{};
+
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descriptorHeap{};
+    uint32_t                                     m_descriptorSize{};
+
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap{};
+    uint32_t                                     m_samplerDescriptorSize{};
+
+    bool m_resourcesBound{false};
 
     void AcquireNextFrame();
 

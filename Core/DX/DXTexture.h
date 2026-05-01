@@ -36,9 +36,16 @@ public:
 
     [[nodiscard]] std::string_view GetName() const { return m_name; }
 
+    [[nodiscard]] ID3D12Resource *GetResource() const { return m_texture.Get(); }
+
+    [[nodiscard]] DXGI_FORMAT GetFormat() const { return m_format; }
+
+    [[nodiscard]] const D3D12_SAMPLER_DESC &GetSampler() const { return m_sampler; }
+
 private:
     std::string m_name{};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture{};
+    DXGI_FORMAT                            m_format{DXGI_FORMAT_UNKNOWN};
     D3D12_SAMPLER_DESC                     m_sampler{};
 };
