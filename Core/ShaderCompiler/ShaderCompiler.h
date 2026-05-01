@@ -6,7 +6,10 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
+#include <directx/d3d12.h>
+#include <directx/d3dx12.h>
 #include <slang-com-ptr.h>
 
 #include "Singleton.h"
@@ -22,6 +25,7 @@ public:
     ~ShaderCompiler() = default;
 
     [[nodiscard]] const std::unordered_map<SlangStage, Slang::ComPtr<ISlangBlob>> &GetEntryPoints(const std::string &filePath) const;
+    [[nodiscard]] std::vector<CD3DX12_ROOT_PARAMETER1>                             GetRootParameters(const std::string &filePath) const;
 
 
 private:
@@ -33,8 +37,8 @@ private:
 
     std::unordered_map<std::string, std::unordered_map<SlangStage, Slang::ComPtr<ISlangBlob>>> m_entryPoints{};
     std::unordered_map<std::string, Slang::ComPtr<slang::IComponentType>>                      m_shaderPrograms{};
-
-    // TODO: extract signature
+    std::unordered_map<std::string, std::vector<CD3DX12_DESCRIPTOR_RANGE1>>                    m_descriptorRanges{};
+    std::unordered_map<std::string, std::vector<CD3DX12_ROOT_PARAMETER1>>                      m_rootParameters{};
 
     std::string m_diagnosticMessage;
 

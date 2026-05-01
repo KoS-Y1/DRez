@@ -46,6 +46,7 @@ add_library(ShaderCompiler
 target_include_directories(ShaderCompiler PUBLIC ShaderCompiler)
 target_link_libraries(ShaderCompiler PUBLIC
         slang::slang
+        d3d12
         Utils
         Files
         Debug
