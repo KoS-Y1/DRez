@@ -278,17 +278,30 @@ bool ShaderCompiler::Compile(const std::string &filePath) {
     rootParameters.reserve(fieldCount);
 
     for (uint32_t i = 0; i < fieldCount; ++i) {
-        slang::VariableLayoutReflection * const  variable = globalTypeLayout->getFieldByIndex(i);
-        const std::optional<CD3DX12_DESCRIPTOR_RANGE1> range = ParseDescriptorRange(variable);
-        if (!range.has_value()) {
-            DebugError("Shader {} has unknown descriptor type at field {}.", filePath, i);
-            continue;
-        }
+        slang::VariableLayoutReflection * const variable = globalTypeLayout->getFieldByIndex(i);
 
         const slang::ParameterCategory category     = variable->getCategory();
         const uint32_t                 bindingIndex = variable->getBindingIndex();
         const uint32_t                 spaceIndex   = variable->getBindingSpace(category);
         const D3D12_SHADER_VISIBILITY  visibility   = ResolveVisibility(entryMetadata, entryStages, category, spaceIndex, bindingIndex);
+
+        if (category == slang::ParameterCategory::PushConstantBuffer) {
+            slang::TypeLayoutReflection * const typeLayout    = variable->getTypeLayout();
+            slang::TypeLayoutReflection * const elementLayout = typeLayout->getElementTypeLayout();
+            const size_t   bytes  = elementLayout ? elementLayout->getSize() : typeLayout->getSize();
+            const uint32_t dwords = static_cast<uint32_t>((bytes + 3) / 4);
+
+            CD3DX12_ROOT_PARAMETER1 rootParam{};
+            rootParam.InitAsConstants(dwords, bindingIndex, spaceIndex, visibility);
+            rootParameters.push_back(rootParam);
+            continue;
+        }
+
+        const std::optional<CD3DX12_DESCRIPTOR_RANGE1> range = ParseDescriptorRange(variable);
+        if (!range.has_value()) {
+            DebugError("Shader {} has unknown descriptor type at field {}.", filePath, i);
+            continue;
+        }
 
         ranges.push_back(range.value());
         CD3DX12_ROOT_PARAMETER1 rootParam{};
