@@ -4,7 +4,6 @@
 
 #include "DXApp.h"
 
-#include <span>
 #include <string>
 
 #include <directx/d3dx12.h>
@@ -14,24 +13,10 @@
 #include "Debug.h"
 
 // TODO: delete
-#include "ResourceManager.h"
 #include "VertexFormats.h"
 
 
 using Microsoft::WRL::ComPtr;
-
-namespace {
-struct WindowExtent {
-    uint32_t width;
-    uint32_t height;
-};
-
-WindowExtent GetWindowExtent(HWND hwnd) {
-    RECT rect;
-    DebugCheckCritical(GetClientRect(hwnd, &rect), "Failed to get window extent");
-    return WindowExtent{.width = static_cast<uint32_t>(rect.right - rect.left), .height = static_cast<uint32_t>(rect.bottom - rect.top)};
-}
-} // namespace
 
 DXApp::DXApp(HWND hwnd) {
 #if defined(_DEBUG)
@@ -158,11 +143,17 @@ DXApp::DXApp(HWND hwnd) {
         DebugCheckCritical(m_fenceEvent, "Failed to create fence, error 0x{:x}", static_cast<uint32_t>(HRESULT_FROM_WIN32(GetLastError())));
     }
 
-    WindowExtent extent = GetWindowExtent(hwnd);
+    // Get window extent
+    {
+        RECT rect;
+        DebugCheckCritical(GetClientRect(hwnd, &rect), "Failed to get window extent");
+        m_width  = static_cast<uint32_t>(rect.right - rect.left);
+        m_height = static_cast<uint32_t>(rect.bottom - rect.top);
+    }
 
     // Swapchain
     {
-        const DXGI_MODE_DESC bufferDesc{.Width = extent.width, .Height = extent.height, .Format = kPresentFormat};
+        const DXGI_MODE_DESC bufferDesc{.Width = m_width, .Height = m_height, .Format = kPresentFormat};
 
         DXGI_SWAP_CHAIN_DESC swapchainDesc{
             .BufferDesc   = bufferDesc,
@@ -189,14 +180,18 @@ DXApp::DXApp(HWND hwnd) {
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc{
             .Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            .NumDescriptors = kMaxFramesInFlight,
+            .NumDescriptors = kRenderTargetCount,
             .Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
         };
 
         result = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
         DebugCheckCritical(SUCCEEDED(result), "Failed to create render target view descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
-
         m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        result    = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
+        DebugCheckCritical(SUCCEEDED(result), "Failed to create depth stencil view descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
+        m_dsvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
         desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.NumDescriptors = 1024;
@@ -211,54 +206,12 @@ DXApp::DXApp(HWND hwnd) {
         m_samplerDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     }
 
-    // Frame resources
+    // Swapchain images
     {
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle{m_rtvHeap->GetCPUDescriptorHandleForHeapStart()};
-
-        // Create an RTV for each frame
         for (uint32_t i = 0; i < kMaxFramesInFlight; i++) {
-            result = m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i]));
-            DebugCheckCritical(SUCCEEDED(result), "Failed to get buffer when creating RTV #{}, error 0x{:x}", i, static_cast<uint32_t>(result));
-            m_device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, rtvHandle);
-            rtvHandle.Offset(1, m_rtvDescriptorSize);
+            result = m_swapchain->GetBuffer(i, IID_PPV_ARGS(&m_swapchainImages[i]));
+            DebugCheckCritical(SUCCEEDED(result), "Failed to get swapchain image #{}, error 0x{:x}", i, static_cast<uint32_t>(result));
         }
-    }
-
-    m_gfx      = DXGraphicsPipeline(*this, "../Assets/Shaders/test.json");
-    m_viewport = CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height)};
-    m_rect     = CD3DX12_RECT{0, 0, static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height)};
-    // Vertex buffer
-    {
-        std::vector<VertexPT2D> vertices{
-            VertexPT2D({-1.0f, -1.0f}, {0.0f, 0.0f}),
-            VertexPT2D({1.0f, -1.0f}, {1.0f, 0.0f}),
-            VertexPT2D({-1.0f, 1.0f}, {0.0f, 1.0f}),
-            VertexPT2D({1.0f, 1.0f}, {1.0f, 1.0f}),
-        };
-        const uint64_t size = std::span<VertexPT2D>(vertices).size_bytes();
-
-        DXBuffer stagingBuffer{*this, D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "stagingBuffer"};
-        m_vertexBuffer = DXBuffer(*this, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "vertexBuffer");
-
-        D3D12_SUBRESOURCE_DATA data{};
-        data.pData      = reinterpret_cast<uint8_t *>(vertices.data());
-        data.RowPitch   = size;
-        data.SlicePitch = size;
-
-        ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {
-            UpdateSubresources<1>(commandList, m_vertexBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
-
-            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-                m_vertexBuffer.GetBuffer(),
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-            );
-            commandList->ResourceBarrier(1, &barrier);
-        });
-
-        m_vertexBufferView.BufferLocation = m_vertexBuffer.GetGPUVirtualAddress();
-        m_vertexBufferView.StrideInBytes  = sizeof(VertexPT2D);
-        m_vertexBufferView.SizeInBytes    = size;
     }
 }
 
@@ -266,7 +219,7 @@ DXApp::~DXApp() {
     CloseHandle(m_fenceEvent);
 }
 
-DXApp::FrameInfo DXApp::BeginFrame() {
+FrameInfo DXApp::BeginFrame() {
     WaitForFence(m_fenceValues[m_frameIndex]);
     ResetCommand(m_commandAllocators[m_frameIndex].Get(), m_commandLists[m_frameIndex].Get());
 
@@ -275,7 +228,7 @@ DXApp::FrameInfo DXApp::BeginFrame() {
     const std::vector<ID3D12DescriptorHeap *> heaps{m_descriptorHeap.Get(), m_samplerHeap.Get()};
     m_commandLists[m_frameIndex]->SetDescriptorHeaps(heaps.size(), heaps.data());
 
-    return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get()};
+    return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get(), .frameIndex = m_frameIndex};
 }
 
 void DXApp::EndFrame() {
@@ -288,64 +241,35 @@ void DXApp::EndFrame() {
     m_frameIndex                = (m_frameIndex + 1) % kMaxFramesInFlight;
 }
 
-void DXApp::Run() {
-    if (!m_resourcesBound) {
-        const DXTexture &tex = ResourceManager::GetInstance().GetTexture(0);
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
-            .Format                  = tex.GetFormat(),
-            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
-            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            .Texture2D               = {.MostDetailedMip = 0, .MipLevels = 1, .ResourceMinLODClamp = 0.0f}
-        };
-        m_device->CreateShaderResourceView(tex.GetResource(), &srvDesc, m_descriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
-        D3D12_SAMPLER_DESC samplerDesc = tex.GetSampler();
-        m_device->CreateSampler(&samplerDesc, m_samplerHeap->GetCPUDescriptorHandleForHeapStart());
-
-        m_resourcesBound = true;
+void DXApp::CopyToPresentImage(ID3D12Resource *resource) {
+    {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_swapchainImages[m_backBufferIndex].Get(),
+            D3D12_RESOURCE_STATE_PRESENT,
+            D3D12_RESOURCE_STATE_COPY_DEST
+        );
+        m_commandLists[m_frameIndex]->ResourceBarrier(1, &barrier);
     }
 
-    FrameInfo                  frameInfo   = BeginFrame();
-    ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
+    m_commandLists[m_frameIndex]->CopyResource(m_swapchainImages[m_backBufferIndex].Get(), resource);
 
-    commandList->SetGraphicsRootSignature(m_gfx.GetRootSignature());
-    commandList->SetPipelineState(m_gfx.GetPipelineState());
-    commandList->SetGraphicsRootDescriptorTable(0, m_descriptorHeap->GetGPUDescriptorHandleForHeapStart()); // t0
-    commandList->SetGraphicsRootDescriptorTable(1, m_samplerHeap->GetGPUDescriptorHandleForHeapStart());    // s0
-    commandList->RSSetViewports(1, &m_viewport);
-    commandList->RSSetScissorRects(1, &m_rect);
+    {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_swapchainImages[m_backBufferIndex].Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_PRESENT
+        );
+        m_commandLists[m_frameIndex]->ResourceBarrier(1, &barrier);
+    }
+}
 
+void DXApp::CreateRenderTargetView(ID3D12Resource *resource, const int32_t offset) {
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = GetRenderTargetView(offset);
+    m_device->CreateRenderTargetView(resource, nullptr, rtvHandle);
+}
 
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_renderTargets[m_backBufferIndex].Get(),
-        D3D12_RESOURCE_STATE_PRESENT,
-        D3D12_RESOURCE_STATE_RENDER_TARGET
-    );
-    commandList->ResourceBarrier(1, &barrier);
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle{
-        m_rtvHeap->GetCPUDescriptorHandleForHeapStart(),
-        static_cast<int32_t>(m_backBufferIndex),
-        static_cast<uint32_t>(m_rtvDescriptorSize)
-    };
-    commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-
-    const std::vector<float> clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-    commandList->ClearRenderTargetView(rtvHandle, clearColor.data(), 0, nullptr);
-    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-    commandList->DrawInstanced(4, 1, 0, 0);
-
-
-    auto barrier2 = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_renderTargets[m_backBufferIndex].Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PRESENT
-    );
-    commandList->ResourceBarrier(1, &barrier2);
-
-    EndFrame();
+CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetRenderTargetView(int32_t offset) {
+    return {m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), offset, m_rtvDescriptorSize};
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {

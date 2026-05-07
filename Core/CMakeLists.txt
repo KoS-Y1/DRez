@@ -24,8 +24,6 @@ target_link_libraries(DX PUBLIC
         Debug
         Files
         ShaderCompiler
-        # TODO: delete
-        Resources
 )
 
 add_library(Window
@@ -37,6 +35,7 @@ target_link_libraries(Window PUBLIC
         SDL3::SDL3
         Debug
         DX
+        Rendering
 )
 
 add_library(ShaderCompiler
@@ -58,12 +57,16 @@ add_library(Rendering
 )
 target_include_directories(Rendering PUBLIC Rendering)
 target_link_libraries(Rendering PUBLIC
+        Microsoft::DirectXMath
         DX
+        Resources
 )
 
 add_library(Resources
         Resources/ResourceManager.cpp
         Resources/ResourceManager.h
+        Resources/Mesh.cpp
+        Resources/Mesh.h
 )
 target_include_directories(Resources PUBLIC Resources)
 target_link_libraries(Resources PUBLIC

@@ -22,7 +22,9 @@ public:
     DXBuffer(DXBuffer &&)            = default;
     DXBuffer &operator=(DXBuffer &&) = default;
 
-    ~DXBuffer() = default;
+    ~DXBuffer();
+
+    void Upload(uint64_t size, const void *data);
 
     [[nodiscard]] ID3D12Resource *GetBuffer() const { return m_buffer.Get(); }
 
@@ -33,4 +35,6 @@ public:
 private:
     std::string                            m_name{};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_buffer;
+
+    [[maybe_unused]] void *m_mappedData{};
 };

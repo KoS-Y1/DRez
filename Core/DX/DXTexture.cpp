@@ -52,7 +52,7 @@ DXTexture::DXTexture(
             D3D12_HEAP_FLAG_NONE,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             width * height * formatSize,
-            "staging buffer" + name
+            "staging_buffer" + name
         );
 
         app.ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {

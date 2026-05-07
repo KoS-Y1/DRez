@@ -87,6 +87,19 @@ const std::unordered_map<std::string, D3D12_INPUT_LAYOUT_DESC> kInputLayoutMap{
     {"VertexPT2D",  VertexPT2D::GetInputLayout() },
 };
 
+const std::unordered_map<std::string, D3D_PRIMITIVE_TOPOLOGY> kPrimitiveTopologyMap{
+    {"D3D_PRIMITIVE_TOPOLOGY_POINTLIST",         D3D_PRIMITIVE_TOPOLOGY_POINTLIST        },
+    {"D3D_PRIMITIVE_TOPOLOGY_LINELIST",          D3D_PRIMITIVE_TOPOLOGY_LINELIST         },
+    {"D3D_PRIMITIVE_TOPOLOGY_LINESTRIP",         D3D_PRIMITIVE_TOPOLOGY_LINESTRIP        },
+    {"D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST",      D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST     },
+    {"D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP",     D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP    },
+    {"D3D_PRIMITIVE_TOPOLOGY_TRIANGLEFAN",       D3D_PRIMITIVE_TOPOLOGY_TRIANGLEFAN      },
+    {"D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ",      D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ     },
+    {"D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ",     D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ    },
+    {"D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ",  D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ },
+    {"D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ", D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ}
+};
+
 template<typename T>
 T LookupMap(const std::unordered_map<std::string, T> &map, std::string_view key, std::string_view typeName) {
     auto it = map.find(std::string(key));
@@ -141,8 +154,8 @@ D3D12_DEPTH_STENCIL_DESC GetDepthStencil(const JsonFile &file) {
     D3D12_DEPTH_STENCIL_DESC desc = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 
     desc.DepthEnable      = file.Get<bool>("depthEnable", false) ? TRUE : FALSE;
-    desc.DepthWriteMask   = LookupMap(kDepthWriteMaskMap, file.Get<std::string>("depthWriteMask", "D3D12_DEPTH_WRITE_MASK_ALL"), "depth write mask");
-    desc.DepthFunc        = LookupMap(kComparisonFuncMap, file.Get<std::string>("depthFunc", "D3D12_COMPARISON_FUNC_LESS"), "depth func");
+    desc.DepthWriteMask   = LookupMap(kDepthWriteMaskMap, file.Get<std::string>("depthWriteMask", "D3D12_DEPTH_WRITE_MASK_ZERO"), "depth write mask");
+    desc.DepthFunc        = LookupMap(kComparisonFuncMap, file.Get<std::string>("depthFunc", "D3D12_COMPARISON_FUNC_ALWAYS"), "depth func");
     desc.StencilEnable    = file.Get<bool>("stencilEnable", false) ? TRUE : FALSE;
     desc.StencilReadMask  = static_cast<UINT8>(file.Get<int>("stencilReadMask", D3D12_DEFAULT_STENCIL_READ_MASK));
     desc.StencilWriteMask = static_cast<UINT8>(file.Get<int>("stencilWriteMask", D3D12_DEFAULT_STENCIL_WRITE_MASK));
@@ -191,6 +204,9 @@ GraphicsPipelineConfig::GraphicsPipelineConfig(std::string_view inputFile) {
         rtvFormats.emplace_back(LookupMap(kFormatMap, fmt, "rtv format"));
     }
     dsvFormat = LookupMap(kFormatMap, json.Get<std::string>("dsvFormat", "DXGI_FORMAT_UNKNOWN"), "dsv format");
+
+    primitiveTopology =
+        LookupMap(kPrimitiveTopologyMap, json.Get<std::string>("primitiveTopology", "D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST"), "primitive topology");
 
     const JsonFile sampleFile = json.Field("sample");
     sample                    = GetSample(sampleFile);

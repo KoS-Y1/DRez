@@ -12,39 +12,12 @@
 
 #include "DXBUffer.h"
 #include "DXTexture.h"
+#include "Mesh.h"
 #include "Singleton.h"
 
 #include "resources_io.slang"
 
 class DXApp;
-
-class Mesh {
-public:
-    Mesh() = default;
-
-    Mesh(const shader_io::MeshInfo &mesh, uint32_t gltfHandle, std::string name)
-        : m_mesh(mesh)
-        , m_gltfHandle(gltfHandle)
-        , m_name(std::move(name)) {}
-
-    Mesh(const Mesh &)            = delete;
-    Mesh &operator=(const Mesh &) = delete;
-    Mesh(Mesh &&)                 = default;
-    Mesh &operator=(Mesh &&)      = default;
-
-    ~Mesh() = default;
-
-    [[nodiscard]] std::string_view GetName() const { return m_name; }
-
-    [[nodiscard]] const shader_io::MeshInfo &GetMesh() const { return m_mesh; }
-
-    [[nodiscard]] uint32_t GetGltfHandle() const { return m_gltfHandle; }
-
-private:
-    shader_io::MeshInfo m_mesh{};
-    uint32_t            m_gltfHandle{};
-    std::string         m_name{};
-};
 
 class ResourceManager : public Singleton<ResourceManager> {
     using Key = std::string;

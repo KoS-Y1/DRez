@@ -10,20 +10,23 @@
 #include <mutex>
 
 #include <directx/d3d12.h>
-#include <directx/d3dx12_core.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
 #include "DXBuffer.h"
 #include "DXTexture.h"
 
+#include <directx/d3dx12_root_signature.h>
+
+struct FrameInfo {
+    ID3D12GraphicsCommandList *commandList;
+    const uint32_t             frameIndex;
+};
+
 class DXApp {
 public:
     static constexpr uint32_t kMaxFramesInFlight{2};
 
-    struct FrameInfo {
-        ID3D12GraphicsCommandList *commandList;
-    };
 
 public:
     DXApp() = delete;
@@ -38,9 +41,7 @@ public:
 
     FrameInfo BeginFrame();
     void      EndFrame();
-
-    // TODO: remove later
-    void Run();
+    void      CopyToPresentImage(ID3D12Resource *resource);
 
     template<class Func>
     void ImmediateSubmit(Func &&func) {
@@ -55,7 +56,12 @@ public:
         WaitForFence(SignalQueue());
     }
 
+    [[nodiscard]] uint32_t GetWindowWidth() const { return m_width; }
+
+    [[nodiscard]] uint32_t GetWindowHeight() const { return m_height; }
+
     [[nodiscard]] ID3D12Device *GetDevice() const { return m_device.Get(); }
+
 
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
@@ -84,9 +90,18 @@ public:
         return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, sampler, data, name};
     }
 
+public:
+    // Resource
+    void CreateRenderTargetView(ID3D12Resource *resource, int32_t offset);
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE GetRenderTargetView(int32_t offset);
+
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
     static constexpr uint64_t    kPointOneSecond{100000000};
+
+    uint32_t m_width{};
+    uint32_t m_height{};
 
     Microsoft::WRL::ComPtr<ID3D12Device>                                              m_device{};
     Microsoft::WRL::ComPtr<ID3D12CommandQueue>                                        m_commandQueue{};
@@ -106,15 +121,18 @@ private:
 
 private:
     // Resources
-    Microsoft::WRL::ComPtr<IDXGISwapChain3>                                m_swapchain{};
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>                           m_rtvHeap{};
-    uint32_t                                                               m_rtvDescriptorSize{};
-    uint32_t                                                               m_backBufferIndex{};
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kMaxFramesInFlight> m_renderTargets{};
+    static constexpr uint32_t kRenderTargetCount = 1;
 
+    Microsoft::WRL::ComPtr<IDXGISwapChain3>                                m_swapchain{};
+    uint32_t                                                               m_backBufferIndex{};
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kMaxFramesInFlight> m_swapchainImages{};
+
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap{};
+    uint32_t                                     m_rtvDescriptorSize{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap{};
+    uint32_t                                     m_dsvDescriptorSize{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descriptorHeap{};
     uint32_t                                     m_descriptorSize{};
-
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap{};
     uint32_t                                     m_samplerDescriptorSize{};
 
@@ -132,11 +150,4 @@ private:
     std::mutex m_immediateMutes{};
 
     void WaitForFence(uint64_t fenceValue, uint64_t timeout = kPointOneSecond);
-
-    // TODO: testing
-    DXGraphicsPipeline       m_gfx;
-    CD3DX12_VIEWPORT         m_viewport{};
-    CD3DX12_RECT             m_rect{};
-    DXBuffer                 m_vertexBuffer{};
-    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView{};
 };

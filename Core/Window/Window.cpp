@@ -8,6 +8,7 @@
 
 #include "DXApp.h"
 #include "Debug.h"
+#include "Renderer.h"
 
 namespace {
 constexpr int kMaxWindowWidth{1600};
@@ -19,13 +20,14 @@ constexpr int kMinWindowHeight{360};
 Window::Window()
     : m_width(kMaxWindowWidth)
     , m_height(kMaxWindowHeight) {
-    m_window = SDL_CreateWindow("DRez", m_width, m_height, SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_RESIZABLE);
+    m_window = SDL_CreateWindow("DRez", m_width, m_height, SDL_WINDOW_HIGH_PIXEL_DENSITY);
     DebugCheckCritical(m_window != nullptr, "Failed to create window");
 
     SDL_SetWindowMaximumSize(m_window, kMaxWindowWidth, kMaxWindowHeight);
     SDL_SetWindowMinimumSize(m_window, kMinWindowWidth, kMinWindowHeight);
 
     m_dxApp = std::make_unique<DXApp>(GetHWND());
+    m_renderer = std::make_unique<Renderer>(*m_dxApp);
 }
 
 Window::~Window() {
@@ -48,7 +50,8 @@ void Window::Run() {
             }
         }
 
-        m_dxApp->Run();
+        m_renderer->Render();
+
     }
 
     DebugInfo("SDL_Window quitting");

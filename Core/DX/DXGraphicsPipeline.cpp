@@ -17,16 +17,10 @@ using Microsoft::WRL::ComPtr;
 DXGraphicsPipeline::DXGraphicsPipeline(DXApp &app, std::string_view filePath) {
     const GraphicsPipelineConfig config{filePath};
     m_name = config.name;
+    m_primitiveTopology = config.primitiveTopology;
 
     // Create root signature
     {
-        // TODO: extract descriptor layout here
-
-        CD3DX12_DESCRIPTOR_RANGE1 t0{};
-        t0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-        CD3DX12_DESCRIPTOR_RANGE1 s0{};
-        s0.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0);
-
         std::vector<CD3DX12_ROOT_PARAMETER1> rootParams = ShaderCompiler::GetInstance().GetRootParameters(config.shader);
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};

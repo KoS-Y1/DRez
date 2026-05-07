@@ -1,5 +1,6 @@
 {
-    "shaders":[
-        "../Assets/Shaders/test.slang"
+    "shaders": [
+        "../Assets/Shaders/test.slang",
+        "../Assets/Shaders/forward.slang"
     ]
 }

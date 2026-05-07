@@ -24,7 +24,7 @@ void ResourceManager::Init(DXApp &app) {
     }
 
     const D3D12_SAMPLER_DESC defaultSampler{
-        .Filter         = D3D12_FILTER_MIN_MAG_MIP_POINT,
+        .Filter         = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
         .AddressU       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         .AddressV       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
@@ -254,7 +254,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     }
 
     const D3D12_SAMPLER_DESC defaultSampler{
-        .Filter         = D3D12_FILTER_MIN_MAG_MIP_POINT,
+        .Filter         = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
         .AddressU       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         .AddressV       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,

@@ -24,15 +24,18 @@ public:
 
     ~DXGraphicsPipeline() = default;
 
+    [[nodiscard]] std::string_view GetName() const { return m_name; }
     [[nodiscard]] ID3D12RootSignature *GetRootSignature() const { return m_rootSignature.Get(); }
 
     [[nodiscard]] ID3D12PipelineState *GetPipelineState() const { return m_pipelineState.Get(); }
 
-    [[nodiscard]] std::string_view GetName() const { return m_name; }
+    [[nodiscard]] D3D12_PRIMITIVE_TOPOLOGY GetPrimitiveTopology() const { return m_primitiveTopology; }
 
 private:
     std::string m_name;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
+
+    D3D_PRIMITIVE_TOPOLOGY m_primitiveTopology{};
 };

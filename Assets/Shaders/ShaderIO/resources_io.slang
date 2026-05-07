@@ -53,4 +53,13 @@ SLANG_PUBLIC struct InstanceInfo
     SLANG_PUBLIC uint32_t materialHandle;
 };
 
+SLANG_PUBLIC struct GlobalSceneInfo
+{
+    SLANG_PUBLIC float4x4 viewProj;
+
+    SLANG_PUBLIC InstanceInfo *instances;
+    SLANG_PUBLIC MeshInfo *meshes;
+    SLANG_PUBLIC MaterialInfo *materials;
+};
+
 };
