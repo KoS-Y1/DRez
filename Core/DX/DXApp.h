@@ -92,9 +92,14 @@ public:
 
 public:
     // Resource
-    void CreateRenderTargetView(ID3D12Resource *resource, int32_t offset);
+    void CreateRenderTargetView(ID3D12Resource *resource, int32_t index);
+    void CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc);
+    void CreateSampler(const D3D12_SAMPLER_DESC &desc, int32_t index);
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE GetRenderTargetView(int32_t offset);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE GetRenderTargetViewHandle(int32_t index);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE GetShaderResourceViewHandle(int32_t index);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE GetSamplerHandle(int32_t index);
+
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};

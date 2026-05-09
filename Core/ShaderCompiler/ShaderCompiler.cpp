@@ -67,6 +67,8 @@ std::optional<CD3DX12_DESCRIPTOR_RANGE1> ParseDescriptorRange(slang::VariableLay
     }
 
     uint32_t descriptorCount = 1;
+
+    // Bindless descriptor
     if (kind == slang::TypeReflection::Kind::Array) {
         const size_t elementCount = variable->getType()->getElementCount();
         descriptorCount           = static_cast<uint32_t>(std::max<uint64_t>(kDefaultArrayDescriptorCount, elementCount));
@@ -135,7 +137,7 @@ ShaderCompiler::ShaderCompiler() {
 
     const slang::TargetDesc target{
         .format  = SLANG_DXIL,
-        .profile = m_globalSession->findProfile("sm_6_3"),
+        .profile = m_globalSession->findProfile("sm_6_9"),
     };
 
 #if defined(NDEBUG)

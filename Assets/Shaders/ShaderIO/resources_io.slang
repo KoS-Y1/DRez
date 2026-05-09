@@ -42,7 +42,7 @@ SLANG_PUBLIC struct MaterialInfo
 
 SLANG_PUBLIC struct MeshInfo
 {
-    SLANG_PUBLIC uint8_t *buffer = nullptr;
+    SLANG_PUBLIC uint32_t gltfHandle;
     SLANG_PUBLIC TriangleMesh triangleMesh;
     SLANG_PUBLIC int indexType;
 };

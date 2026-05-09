@@ -32,9 +32,12 @@ public:
 
     [[nodiscard]] std::string_view GetName() const { return m_name; }
 
+    [[nodiscard]] uint64_t GetBufferSize() const { return m_bufferSize; }
+
 private:
     std::string                            m_name{};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_buffer;
+    uint64_t                               m_bufferSize{};
 
     [[maybe_unused]] void *m_mappedData{};
 };

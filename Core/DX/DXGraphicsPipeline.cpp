@@ -16,7 +16,7 @@ using Microsoft::WRL::ComPtr;
 
 DXGraphicsPipeline::DXGraphicsPipeline(DXApp &app, std::string_view filePath) {
     const GraphicsPipelineConfig config{filePath};
-    m_name = config.name;
+    m_name              = config.name;
     m_primitiveTopology = config.primitiveTopology;
 
     // Create root signature
@@ -24,7 +24,14 @@ DXGraphicsPipeline::DXGraphicsPipeline(DXApp &app, std::string_view filePath) {
         std::vector<CD3DX12_ROOT_PARAMETER1> rootParams = ShaderCompiler::GetInstance().GetRootParameters(config.shader);
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};
-        desc.Init_1_1(rootParams.size(), rootParams.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        desc.Init_1_1(
+            rootParams.size(),
+            rootParams.data(),
+            0,
+            nullptr,
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |
+                D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
+        );
 
         ComPtr<ID3DBlob> signature{};
         ComPtr<ID3DBlob> error{};

@@ -263,13 +263,31 @@ void DXApp::CopyToPresentImage(ID3D12Resource *resource) {
     }
 }
 
-void DXApp::CreateRenderTargetView(ID3D12Resource *resource, const int32_t offset) {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = GetRenderTargetView(offset);
+void DXApp::CreateRenderTargetView(ID3D12Resource *resource, const int32_t index) {
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = GetRenderTargetViewHandle(index);
     m_device->CreateRenderTargetView(resource, nullptr, rtvHandle);
 }
 
-CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetRenderTargetView(int32_t offset) {
-    return {m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), offset, m_rtvDescriptorSize};
+void DXApp::CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
+    CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle = GetShaderResourceViewHandle(index);
+    m_device->CreateShaderResourceView(resource, &desc, srvHandle);
+}
+
+void DXApp::CreateSampler(const D3D12_SAMPLER_DESC &desc, int32_t index) {
+    CD3DX12_CPU_DESCRIPTOR_HANDLE samplerHandle = GetSamplerHandle(index);
+    m_device->CreateSampler(&desc, samplerHandle);
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetRenderTargetViewHandle(int32_t index) {
+    return {m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_rtvDescriptorSize};
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetShaderResourceViewHandle(int32_t index) {
+    return {m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(), index, m_descriptorSize};
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetSamplerHandle(int32_t index) {
+    return {m_samplerHeap->GetCPUDescriptorHandleForHeapStart(), index, m_samplerDescriptorSize};
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {

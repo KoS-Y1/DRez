@@ -20,6 +20,7 @@ void DebugWarning(const spdlog::format_string_t<Args...> &format, Args &&...args
 template<typename... Args>
 void DebugError(const spdlog::format_string_t<Args...> &format, Args &&...args) {
     spdlog::error(format, std::forward<Args>(args)...);
+    exit(EXIT_FAILURE);
 }
 
 template<typename... Args>
@@ -33,5 +34,4 @@ template<typename... Args>
 void DebugCheckCritical(const bool succeeded, const spdlog::format_string_t<Args...> &failMessage, Args &&...args) {
     if (succeeded) return;
     DebugError(failMessage, std::forward<Args>(args)...);
-    exit(EXIT_FAILURE);
 }

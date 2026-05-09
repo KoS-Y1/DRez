@@ -10,12 +10,15 @@
 
 #include "resources_io.slang"
 
+class DXBuffer;
+
 class Mesh {
 public:
     Mesh() = default;
 
-    Mesh(const shader_io::MeshInfo &mesh, uint32_t gltfHandle, std::string name);
-
+    Mesh(const shader_io::MeshInfo &mesh,  std::string name)
+        : m_mesh(mesh)
+        , m_name(std::move(name)) {};
 
     Mesh(const Mesh &)            = delete;
     Mesh &operator=(const Mesh &) = delete;
@@ -24,17 +27,16 @@ public:
 
     ~Mesh() = default;
 
+    void CreateIndexView();
+
     [[nodiscard]] std::string_view GetName() const { return m_name; }
 
     [[nodiscard]] const shader_io::MeshInfo &GetMesh() const { return m_mesh; }
 
-    [[nodiscard]] uint32_t GetGltfHandle() const { return m_gltfHandle; }
-
     [[nodiscard]] const D3D12_INDEX_BUFFER_VIEW &GetIndexBufferView() const { return m_indexBufferView; }
 
 private:
-    shader_io::MeshInfo m_mesh{};
-    uint32_t            m_gltfHandle{};
-    std::string         m_name{};
+    shader_io::MeshInfo     m_mesh{};
+    std::string             m_name{};
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView{};
 };

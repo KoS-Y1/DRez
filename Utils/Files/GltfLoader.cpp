@@ -33,7 +33,7 @@ std::optional<fastgltf::Asset> LoadGltf(std::string_view path) {
     return std::move(asset.get());
 }
 
-std::optional<shader_io::MeshInfo> LoadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh, D3D12_GPU_VIRTUAL_ADDRESS bufferAddress) {
+std::optional<shader_io::MeshInfo> LoadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh, uint32_t gltfHandle) {
     // Lambda for element byte size calculation
     auto getElementByteSize = [](fastgltf::ComponentType type) -> uint32_t {
         return type == fastgltf::ComponentType::UnsignedShort ? 2U :
@@ -92,8 +92,8 @@ std::optional<shader_io::MeshInfo> LoadMesh(const fastgltf::Asset &asset, const 
     const fastgltf::BufferView &bufferView = asset.bufferViews[accessor.bufferViewIndex.value()];
 
     shader_io::MeshInfo meshInfo{
-        .buffer    = reinterpret_cast<uint8_t *>(bufferAddress),
-        .indexType = accessor.componentType == fastgltf::ComponentType::UnsignedShort ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT,
+        .gltfHandle = gltfHandle,
+        .indexType  = accessor.componentType == fastgltf::ComponentType::UnsignedShort ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT,
     };
     meshInfo.triangleMesh.indices = {
         .offset = static_cast<uint32_t>(bufferView.byteOffset + accessor.byteOffset),

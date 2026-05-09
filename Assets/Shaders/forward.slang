@@ -3,13 +3,19 @@ import Utils;
 
 ConstantBuffer<shader_io::GlobalUniforms> pushConstants;
 
+StructuredBuffer<shader_io::InstanceInfo> instances;
+StructuredBuffer<shader_io::MeshInfo> meshes;
+StructuredBuffer<shader_io::MaterialInfo> materials;
+
 struct VSOut
 {
     float4 sv_position : SV_Position;
-    float3 worldPos;
-    float2 uv;
-    float3x3 TBN;
-    nointerpolation uint instanceId;
+    float3 worldPos : POSITION;
+    float2 uv : TEXCOORD0;
+    float3 T : TANGENT;
+    float3 B : BINORMAL;
+    float3 N : NORMAL;
+    nointerpolation uint instanceId : TEXCOORD1;
 }
 
 [shader("vertex")]
@@ -50,7 +56,9 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
     output.uv = GetVertexAttribute<float2>(mesh.buffer, mesh.triangleMesh.texCoords, vertexId);
     output.worldPos = mul(float4(pos, 1.0f), pushConstants.transform).xyz;
     output.sv_position = mul(float4(output.worldPos, 1.0f), sceneInfo->viewProj);
-    output.TBN = float3x3(T, B, N);
+    output.T = T;
+    output.B = B;
+    output.N = N;
     output.instanceId = instanceId;
 
     return output;
