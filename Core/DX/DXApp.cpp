@@ -268,6 +268,11 @@ void DXApp::CreateRenderTargetView(ID3D12Resource *resource, const int32_t index
     m_device->CreateRenderTargetView(resource, nullptr, rtvHandle);
 }
 
+void DXApp::CreateDepthStencilView(ID3D12Resource *resource, const int32_t index) {
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetDepthStencilViewHandle(index);
+    m_device->CreateDepthStencilView(resource, nullptr, dsvHandle);
+}
+
 void DXApp::CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
     CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle = GetShaderResourceViewHandle(index);
     m_device->CreateShaderResourceView(resource, &desc, srvHandle);
@@ -280,6 +285,10 @@ void DXApp::CreateSampler(const D3D12_SAMPLER_DESC &desc, int32_t index) {
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetRenderTargetViewHandle(int32_t index) {
     return {m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_rtvDescriptorSize};
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDepthStencilViewHandle(int32_t index) {
+    return {m_dsvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_dsvDescriptorSize};
 }
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetShaderResourceViewHandle(int32_t index) {

@@ -58,4 +58,7 @@ private:
 
     DXTexture m_finalTexture{};
     int32_t   m_finalTextureRtvOffset{};
+
+    DXTexture m_depthTexture{};
+    int32_t   m_depthTextureDsvOffset{};
 };

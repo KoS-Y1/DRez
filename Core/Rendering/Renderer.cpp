@@ -100,6 +100,7 @@ Renderer::Renderer(DXApp &app)
     // Render resources
     {
         int32_t rtvOffset{0};
+        int32_t dsvOffset{0};
 
         const D3D12_SAMPLER_DESC defaultSampler{
             .Filter         = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -116,8 +117,8 @@ Renderer::Renderer(DXApp &app)
         m_finalTexture = m_app.CreateTexture(
             m_width,
             m_height,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
             D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
             D3D12_HEAP_FLAG_NONE,
             defaultSampler,
@@ -126,6 +127,27 @@ Renderer::Renderer(DXApp &app)
         );
         m_app.CreateRenderTargetView(m_finalTexture.GetResource(), rtvOffset);
         m_finalTextureRtvOffset = rtvOffset++;
+
+        // Depth texture
+        m_depthTexture = m_app.CreateTexture(
+            m_width,
+            m_height,
+            DXGI_FORMAT_D32_FLOAT,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_D32_FLOAT),
+            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
+            D3D12_HEAP_FLAG_NONE,
+            defaultSampler,
+            nullptr,
+            "depth_texture"
+        );
+        m_app.CreateDepthStencilView(m_depthTexture.GetResource(), dsvOffset);
+        m_depthTextureDsvOffset = dsvOffset++;
+
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            auto barrier =
+                CD3DX12_RESOURCE_BARRIER::Transition(m_depthTexture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+            commandList->ResourceBarrier(1, &barrier);
+        });
     }
 
     // TODO: bindless descriptor for textures
@@ -152,9 +174,11 @@ void Renderer::Render() {
         commandList->ResourceBarrier(1, &barrier);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_finalTextureRtvOffset);
-        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
+        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
         static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 1.0f};
         commandList->ClearRenderTargetView(rtvHandle, rtvClearColor, 0, nullptr);
+        commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
         commandList->IASetPrimitiveTopology(m_forward.GetPrimitiveTopology());
 
