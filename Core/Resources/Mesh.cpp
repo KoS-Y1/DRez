@@ -4,9 +4,6 @@
 
 #include "Mesh.h"
 
-#include "DXBuffer.h"
-#include "ResourceManager.h"
-
 void Mesh::CreateIndexView() {
     auto GetIndexFormat = [](int32_t indexType) -> DXGI_FORMAT {
         if (indexType == 0) {
@@ -15,10 +12,9 @@ void Mesh::CreateIndexView() {
         return DXGI_FORMAT_R32_UINT;
     };
 
-    const auto     &idx        = m_mesh.triangleMesh.indices;
-    const DXBuffer &gltfBuffer = ResourceManager::GetInstance().GetGltfBuffer(m_mesh.gltfHandle);
-    m_indexBufferView          = D3D12_INDEX_BUFFER_VIEW{
-        .BufferLocation = gltfBuffer.GetGPUVirtualAddress() + idx.offset,
+    const auto &idx   = m_mesh.triangleMesh.indices;
+    m_indexBufferView = D3D12_INDEX_BUFFER_VIEW{
+        .BufferLocation = m_gltfBufferAddress + idx.offset,
         .SizeInBytes    = idx.count * idx.byteStride,
         .Format         = GetIndexFormat(m_mesh.indexType),
     };

@@ -22,27 +22,6 @@ class DXApp;
 class ResourceManager : public Singleton<ResourceManager> {
     using Key = std::string;
 
-    struct ShaderResource {
-        enum class ResourceType : uint8_t {
-            eGltfBuffer = 0,
-            eTexture,
-            eUnused = 0xff
-        };
-
-        ResourceType     resourceType{ResourceType::eUnused};
-        std::string_view name{};
-        uint32_t         physicalIndex{};
-        uint32_t         heapIndex{};
-
-        ShaderResource() = default;
-
-        ShaderResource(ResourceType resourceType, const std::string_view name, uint32_t physicalIndex, uint32_t heapIndex)
-            : resourceType(resourceType)
-            , name(name)
-            , physicalIndex(physicalIndex)
-            , heapIndex(heapIndex) {};
-    };
-
 public:
     void Init(DXApp &app);
 
@@ -59,9 +38,9 @@ public:
 
     [[nodiscard]] std::string_view GetMaterialKey(uint32_t handle) const { return m_materialKeys[handle]; }
 
-    [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS GetMeshInfoBufferAddress() const { return m_meshInfoBuffer.GetGPUVirtualAddress(); }
+    [[nodiscard]] uint32_t GetMeshesBindlessIndex() const { return m_meshInfoBufferIndex; }
 
-    [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS GetMaterialBufferAddress() const { return m_materialInfoBuffer.GetGPUVirtualAddress(); }
+    [[nodiscard]] uint32_t GetMaterialsBindlessIndex() const { return m_materialInfoBufferIndex; }
 
     // [[nodiscard]] const shader_io::SkyboxMaterialInfo &GetSkyboxMaterial() const { return m_skyboxMaterial; }
 
@@ -78,6 +57,7 @@ private:
     std::vector<Mesh>                 m_meshes;
     std::vector<shader_io::MeshInfo>  m_meshInfos;
     DXBuffer                          m_meshInfoBuffer;
+    uint32_t                          m_meshInfoBufferIndex{};
 
     // Texture
     std::unordered_map<Key, uint32_t> m_textureLookup;
@@ -88,15 +68,12 @@ private:
     std::vector<shader_io::MaterialInfo> m_materialInfo;
     std::vector<std::string>             m_materialKeys;
     DXBuffer                             m_materialInfoBuffer;
+    uint32_t                             m_materialInfoBufferIndex{};
 
     // Instance
     std::unordered_map<Key, uint32_t>    m_instanceLookup;
     std::vector<shader_io::InstanceInfo> m_instanceInfo;
     DXBuffer                             m_instanceInfoBuffer;
-
-    // Bindless resources
-    std::unordered_map<Key, uint32_t> m_resourceLookup;
-    std::vector<ShaderResource>       m_resources;
 
     // shader_io::SkyboxMaterialInfo m_skyboxMaterial;
 

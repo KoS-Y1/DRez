@@ -56,6 +56,7 @@ private:
 
     std::array<DXBuffer, DXApp::kMaxFramesInFlight> m_sceneBuffers{};
     DXBuffer                                        m_instanceBuffer{};
+    uint32_t                                        m_instanceBufferIndex{};
 
     DXTexture m_finalTexture{};
     int32_t   m_finalTextureRtvOffset{};

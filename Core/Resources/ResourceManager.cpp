@@ -81,26 +81,17 @@ void ResourceManager::Init(DXApp &app) {
 
     // Mesh buffer
     {
-        m_meshInfoBuffer = app.CreateBuffer(
-            D3D12_HEAP_TYPE_DEFAULT,
-            D3D12_HEAP_FLAG_NONE,
-            D3D12_RESOURCE_STATE_COMMON,
-            std::span<shader_io::MeshInfo>(m_meshInfos).size_bytes(),
-            "mesh_buffer"
-        );
+        const uint64_t size = std::span<shader_io::MeshInfo>(m_meshInfos).size_bytes();
 
-        DXBuffer stagingBuffer = app.CreateBuffer(
-            D3D12_HEAP_TYPE_UPLOAD,
-            D3D12_HEAP_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            std::span<shader_io::MeshInfo>(m_meshInfos).size_bytes(),
-            "staging_buffer_mesh"
-        );
+        m_meshInfoBuffer = app.CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "mesh_buffer");
+
+        DXBuffer stagingBuffer =
+            app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_mesh");
 
         const D3D12_SUBRESOURCE_DATA data{
             .pData      = m_meshInfos.data(),
-            .RowPitch   = static_cast<LONG_PTR>(std::span<shader_io::MeshInfo>(m_meshInfos).size_bytes()),
-            .SlicePitch = static_cast<LONG_PTR>(std::span<shader_io::MeshInfo>(m_meshInfos).size_bytes()),
+            .RowPitch   = static_cast<LONG_PTR>(size),
+            .SlicePitch = static_cast<LONG_PTR>(size),
         };
         app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
             UpdateSubresources<1>(commandList, m_meshInfoBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
@@ -108,76 +99,43 @@ void ResourceManager::Init(DXApp &app) {
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
                 m_meshInfoBuffer.GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
             );
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        m_meshInfoBufferIndex = app.AllocateBindlessIndex();
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = DXGI_FORMAT_UNKNOWN,
+            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Buffer                  = {
+                                 .FirstElement        = 0,
+                                 .NumElements         = static_cast<uint32_t>(m_meshInfos.size()),
+                                 .StructureByteStride = sizeof(shader_io::MeshInfo),
+                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+            },
+        };
+        app.CreateShaderResourceView(m_meshInfoBuffer.GetBuffer(), m_meshInfoBufferIndex, desc);
     }
 
-    // Resource views
-    {
-        // Index view
-        std::ranges::for_each(m_meshes, [](Mesh &mesh) { mesh.CreateIndexView(); });
-
-        // Shader resource view
-        std::ranges::for_each(m_resources, [this, &app](ShaderResource &resource) {
-            if (resource.resourceType == ShaderResource::ResourceType::eGltfBuffer) {
-                const DXBuffer &buffer = m_gltfBuffers[resource.physicalIndex];
-
-                D3D12_BUFFER_SRV srv{
-                    .FirstElement        = 0,
-                    .NumElements         = static_cast<uint32_t>(buffer.GetBufferSize()) / drez::dx_utils::GetFormatSize(DXGI_FORMAT_R32_TYPELESS),
-                    .StructureByteStride = 0,
-                    .Flags               = D3D12_BUFFER_SRV_FLAG_RAW
-                };
-
-                D3D12_SHADER_RESOURCE_VIEW_DESC desc{
-                    .Format                  = DXGI_FORMAT_R32_TYPELESS,
-                    .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-                    .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-                    .Buffer                  = srv
-                };
-
-                app.CreateShaderResourceView(buffer.GetBuffer(), resource.heapIndex, desc);
-            }
-            if (resource.resourceType == ShaderResource::ResourceType::eTexture) {
-                const DXTexture &texture = m_textures[resource.physicalIndex];
-
-                D3D12_SHADER_RESOURCE_VIEW_DESC desc{
-                    .Format                  = DXGI_FORMAT_R32_TYPELESS,
-                    .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-                    .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-                    .Texture2D.MipLevels     = 1
-                };
-
-                app.CreateShaderResourceView(texture.GetResource(), resource.heapIndex, desc);
-            }
-        });
-    }
+    // Index views
+    std::ranges::for_each(m_meshes, [](Mesh &mesh) { mesh.CreateIndexView(); });
 
 
     // Material buffer
     {
-        m_materialInfoBuffer = app.CreateBuffer(
-            D3D12_HEAP_TYPE_DEFAULT,
-            D3D12_HEAP_FLAG_NONE,
-            D3D12_RESOURCE_STATE_COMMON,
-            std::span<shader_io::MaterialInfo>(m_materialInfo).size_bytes(),
-            "material_buffer"
-        );
+        const uint64_t size = std::span<shader_io::MaterialInfo>(m_materialInfo).size_bytes();
 
-        DXBuffer stagingBuffer = app.CreateBuffer(
-            D3D12_HEAP_TYPE_UPLOAD,
-            D3D12_HEAP_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            std::span<shader_io::MaterialInfo>(m_materialInfo).size_bytes(),
-            "staging_buffer_material"
-        );
+        m_materialInfoBuffer = app.CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "material_buffer");
+
+        DXBuffer stagingBuffer =
+            app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_material");
 
         const D3D12_SUBRESOURCE_DATA data{
             .pData      = m_materialInfo.data(),
-            .RowPitch   = static_cast<LONG_PTR>(std::span<shader_io::MaterialInfo>(m_materialInfo).size_bytes()),
-            .SlicePitch = static_cast<LONG_PTR>(std::span<shader_io::MaterialInfo>(m_materialInfo).size_bytes()),
+            .RowPitch   = static_cast<LONG_PTR>(size),
+            .SlicePitch = static_cast<LONG_PTR>(size),
         };
 
         app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
@@ -186,34 +144,39 @@ void ResourceManager::Init(DXApp &app) {
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
                 m_materialInfoBuffer.GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
             );
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        m_materialInfoBufferIndex = app.AllocateBindlessIndex();
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = DXGI_FORMAT_UNKNOWN,
+            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Buffer                  = {
+                                 .FirstElement        = 0,
+                                 .NumElements         = static_cast<uint32_t>(m_materialInfo.size()),
+                                 .StructureByteStride = sizeof(shader_io::MaterialInfo),
+                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+            },
+        };
+        app.CreateShaderResourceView(m_materialInfoBuffer.GetBuffer(), m_materialInfoBufferIndex, desc);
     }
 
     // Instance buffer
     {
-        m_instanceInfoBuffer = app.CreateBuffer(
-            D3D12_HEAP_TYPE_DEFAULT,
-            D3D12_HEAP_FLAG_NONE,
-            D3D12_RESOURCE_STATE_COMMON,
-            std::span<shader_io::InstanceInfo>(m_instanceInfo).size_bytes(),
-            "instance_buffer"
-        );
+        const uint64_t size = std::span<shader_io::InstanceInfo>(m_instanceInfo).size_bytes();
 
-        DXBuffer stagingBuffer = app.CreateBuffer(
-            D3D12_HEAP_TYPE_UPLOAD,
-            D3D12_HEAP_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            std::span<shader_io::InstanceInfo>(m_instanceInfo).size_bytes(),
-            "staging_buffer_instance"
-        );
+        m_instanceInfoBuffer = app.CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "instance_buffer");
+
+        DXBuffer stagingBuffer =
+            app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_instance");
 
         const D3D12_SUBRESOURCE_DATA data{
             .pData      = m_instanceInfo.data(),
-            .RowPitch   = static_cast<LONG_PTR>(std::span<shader_io::InstanceInfo>(m_instanceInfo).size_bytes()),
-            .SlicePitch = static_cast<LONG_PTR>(std::span<shader_io::InstanceInfo>(m_instanceInfo).size_bytes()),
+            .RowPitch   = static_cast<LONG_PTR>(size),
+            .SlicePitch = static_cast<LONG_PTR>(size),
         };
 
         app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
@@ -222,7 +185,7 @@ void ResourceManager::Init(DXApp &app) {
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
                 m_instanceInfoBuffer.GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
             );
             commandList->ResourceBarrier(1, &barrier);
         });
@@ -251,8 +214,8 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     std::string gltfName = drez::file_system::GetFileNameWithoutExtension(fileName);
 
     // Create buffer to store GLTF data and upload it to GPU
-    uint32_t gltfHandle = static_cast<uint32_t>(m_gltfBuffers.size());
-    DXBuffer gltfBuffer;
+    const uint32_t gltfBufferIndex = app.AllocateBindlessIndex();
+    DXBuffer       gltfBuffer;
     {
         uint64_t               bufferSize;
         DXBuffer               stagingBuffer;
@@ -300,17 +263,33 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
                 gltfBuffer.GetBuffer(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
             );
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = DXGI_FORMAT_R32_TYPELESS,
+            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Buffer                  = {
+                                 .FirstElement        = 0,
+                                 .NumElements         = static_cast<uint32_t>(gltfBuffer.GetBufferSize() / sizeof(uint32_t)),
+                                 .StructureByteStride = 0,
+                                 .Flags               = D3D12_BUFFER_SRV_FLAG_RAW,
+            },
+        };
+        app.CreateShaderResourceView(gltfBuffer.GetBuffer(), gltfBufferIndex, desc);
     }
+
+    const D3D12_GPU_VIRTUAL_ADDRESS gltfBufferAddress = gltfBuffer.GetGPUVirtualAddress();
+    m_gltfBuffers.push_back(std::move(gltfBuffer));
 
     uint32_t meshHandle{};
     for (size_t meshIndex = 0; meshIndex < asset->meshes.size(); meshIndex++) {
         ThreadPool::GetInstance().Enqueue([&, meshIndex]() {
             const fastgltf::Mesh              &mesh     = asset->meshes[meshIndex];
-            std::optional<shader_io::MeshInfo> meshInfo = drez::file_system::LoadMesh(asset.value(), mesh, gltfHandle);
+            std::optional<shader_io::MeshInfo> meshInfo = drez::file_system::LoadMesh(asset.value(), mesh, gltfBufferIndex);
 
             DebugCheckCritical(meshInfo.has_value(), "Failed to load mesh data from {} {}", fileName, mesh.name);
 
@@ -324,7 +303,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
             meshHandle = static_cast<uint32_t>(m_meshes.size());
             m_meshLookup.emplace(key, meshHandle);
-            m_meshes.emplace_back(meshInfo.value(), key);
+            m_meshes.emplace_back(meshInfo.value(), key, gltfBufferAddress);
             m_meshInfos.emplace_back(meshInfo.value());
 
             DebugInfo("Mesh {} is loaded successfully", key);
@@ -379,16 +358,17 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
     ThreadPool::GetInstance().WaitIdle();
 
-    const uint32_t textureOffset = static_cast<uint32_t>(m_textures.size());
-
     // Load and create textures
     std::vector<DXTexture> textures(asset->textures.size());
+    std::vector<uint32_t>  textureBindlessIndices(asset->textures.size());
     for (size_t i = 0; i < asset->textures.size(); ++i) {
         ThreadPool::GetInstance().Enqueue([&, i]() {
             const fastgltf::Texture &texture = asset->textures[i];
             DebugCheckCritical(texture.imageIndex.has_value(), "{} in {} does not have an image index", texture.name, fileName);
 
             size_t imageIndex = texture.imageIndex.value();
+
+            const uint32_t bindlessIndex = app.AllocateBindlessIndex();
 
             std::scoped_lock<std::mutex> lk{m_textureMutex};
 
@@ -402,12 +382,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             auto width  = static_cast<uint32_t>(std::get<0>(images[imageIndex]));
             auto height = static_cast<uint32_t>(std::get<1>(images[imageIndex]));
 
-            uint32_t resourceHandle = m_resources.size();
-            uint32_t textureHandle  = textureOffset + static_cast<uint32_t>(i);
-            m_resourceLookup.emplace(key, resourceHandle);
-            m_resources.emplace_back(ShaderResource::ResourceType::eTexture, key, textureHandle, resourceHandle);
-
-            m_textureLookup.emplace(key, textureHandle);
+            m_textureLookup.emplace(key, bindlessIndex);
             textures[i] = app.CreateTexture(
                 width,
                 height,
@@ -420,6 +395,15 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 key
             );
 
+            const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+                .Format                  = textures[i].GetFormat(),
+                .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Texture2D               = {.MipLevels = 1},
+            };
+            app.CreateShaderResourceView(textures[i].GetResource(), bindlessIndex, desc);
+
+            textureBindlessIndices[i] = bindlessIndex;
 
             DebugInfo("Texture {} is loaded successfully", key);
         });
@@ -428,13 +412,12 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     ThreadPool::GetInstance().WaitIdle();
     m_textures.insert(m_textures.end(), std::make_move_iterator(textures.begin()), std::make_move_iterator(textures.end()));
 
-    // Lambda for add texture offset to current gltf texture index
-    const auto addTextureOffset = [textureOffset](int32_t index) -> int32_t {
+    // Translate gltf-local texture index to bindless heap index
+    const auto toBindlessIndex = [&textureBindlessIndices](int32_t index) -> int32_t {
         if (index == -1) {
             return -1;
         }
-
-        return static_cast<int32_t>(textureOffset) + index;
+        return static_cast<int32_t>(textureBindlessIndices[index]);
     };
 
     // Load materials
@@ -454,10 +437,10 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 key += "_copy";
             }
 
-            materialInfo.albedoTextureIndex   = addTextureOffset(materialInfo.albedoTextureIndex);
-            materialInfo.ormTextureIndex      = addTextureOffset(materialInfo.ormTextureIndex);
-            materialInfo.emissiveTextureIndex = addTextureOffset(materialInfo.emissiveTextureIndex);
-            materialInfo.normalTextureIndex   = addTextureOffset(materialInfo.normalTextureIndex);
+            materialInfo.albedoTextureIndex   = toBindlessIndex(materialInfo.albedoTextureIndex);
+            materialInfo.ormTextureIndex      = toBindlessIndex(materialInfo.ormTextureIndex);
+            materialInfo.emissiveTextureIndex = toBindlessIndex(materialInfo.emissiveTextureIndex);
+            materialInfo.normalTextureIndex   = toBindlessIndex(materialInfo.normalTextureIndex);
 
             materialHandle = static_cast<uint32_t>(m_materialInfo.size());
             m_materialLookup.emplace(key, static_cast<uint32_t>(materialHandle));
@@ -468,12 +451,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
         });
     }
 
-    m_instanceInfo.emplace_back(meshHandle, materialHandle);
-
-    uint32_t resourceHandle = m_resources.size();
-    m_resourceLookup.emplace(gltfBuffer.GetName(), resourceHandle);
-    m_resources.emplace_back(ShaderResource::ResourceType::eGltfBuffer, gltfBuffer.GetName(), m_gltfBuffers.size(), resourceHandle);
-    m_gltfBuffers.push_back(std::move(gltfBuffer));
-
     ThreadPool::GetInstance().WaitIdle();
+
+    m_instanceInfo.emplace_back(meshHandle, materialHandle);
 }

@@ -71,22 +71,36 @@ Renderer::Renderer(DXApp &app)
             );
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        m_instanceBufferIndex = m_app.AllocateBindlessIndex();
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = DXGI_FORMAT_UNKNOWN,
+            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Buffer                  = {
+                                 .FirstElement        = 0,
+                                 .NumElements         = static_cast<uint32_t>(m_instances.size()),
+                                 .StructureByteStride = sizeof(shader_io::InstanceInfo),
+                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+            },
+        };
+        m_app.CreateShaderResourceView(m_instanceBuffer.GetBuffer(), m_instanceBufferIndex, desc);
     }
 
     // Global scene info and global uniform
     {
         for (uint32_t i = 0; i < m_globalSceneInfos.size(); ++i) {
-            auto &info     = m_globalSceneInfos[i];
-            info.instances = reinterpret_cast<shader_io::InstanceInfo *>(m_instanceBuffer.GetGPUVirtualAddress());
-            info.meshes    = reinterpret_cast<shader_io::MeshInfo *>(ResourceManager::GetInstance().GetMeshBufferAddress());
-            info.materials = reinterpret_cast<shader_io::MaterialInfo *>(ResourceManager::GetInstance().GetMaterialBufferAddress());
+            auto &info          = m_globalSceneInfos[i];
+            info.instancesIndex = m_instanceBufferIndex;
+            info.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
+            info.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
 
             m_sceneBuffers[i] = m_app.CreateBuffer(
                 D3D12_HEAP_TYPE_UPLOAD,
                 D3D12_HEAP_FLAG_NONE,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 sizeof(shader_io::GlobalSceneInfo),
-                "scene_buffer_" + std::to_string(i++)
+                "scene_buffer_" + std::to_string(i)
             );
 
             m_globalUniforms[i].sceneInfo = reinterpret_cast<shader_io::GlobalSceneInfo *>(m_sceneBuffers[i].GetGPUVirtualAddress());
@@ -148,7 +162,7 @@ void Renderer::Render() {
             CD3DX12_RESOURCE_BARRIER::Transition(m_finalTexture.GetResource(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
         commandList->ResourceBarrier(1, &barrier);
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetView(m_finalTextureRtvOffset);
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_finalTextureRtvOffset);
         commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
         static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 1.0f};
         commandList->ClearRenderTargetView(rtvHandle, rtvClearColor, 0, nullptr);

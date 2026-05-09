@@ -3,10 +3,6 @@ import Utils;
 
 ConstantBuffer<shader_io::GlobalUniforms> pushConstants;
 
-StructuredBuffer<shader_io::InstanceInfo> instances;
-StructuredBuffer<shader_io::MeshInfo> meshes;
-StructuredBuffer<shader_io::MaterialInfo> materials;
-
 struct VSOut
 {
     float4 sv_position : SV_Position;
@@ -27,13 +23,19 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
     uint instanceId = instanceIndex + baseInstance;
 
     shader_io::GlobalSceneInfo *sceneInfo = pushConstants.sceneInfo;
-    const shader_io::InstanceInfo instance = sceneInfo->instances[instanceId];
-    const shader_io::MeshInfo mesh = sceneInfo->meshes[instance.meshHandle];
 
-    const float3 pos = GetVertexAttribute<float3>(mesh.buffer, mesh.triangleMesh.positions, vertexId);
-    const float4 tangent = GetVertexAttribute<float4>(mesh.buffer, mesh.triangleMesh.tangents, vertexId);
+    StructuredBuffer<shader_io::InstanceInfo> instances = ResourceDescriptorHeap[sceneInfo->instancesIndex];
+    StructuredBuffer<shader_io::MeshInfo> meshes = ResourceDescriptorHeap[sceneInfo->meshesIndex];
 
-    const float3 normal = GetVertexAttribute<float3>(mesh.buffer, mesh.triangleMesh.normals, vertexId);
+    const shader_io::InstanceInfo instance = instances[instanceId];
+    const shader_io::MeshInfo mesh = meshes[instance.meshHandle];
+
+    ByteAddressBuffer gltfBuffer = ResourceDescriptorHeap[mesh.gltfBufferIndex];
+
+    const float3 pos = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.positions, vertexId);
+    const float4 tangent = GetVertexAttribute<float4>(gltfBuffer, mesh.triangleMesh.tangents, vertexId);
+
+    const float3 normal = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.normals, vertexId);
 
     const float3x3 localToWorld = float3x3(pushConstants.transform);
     const float3x3 normalMatrix = float3x3(pushConstants.normalMatrix);
@@ -53,7 +55,7 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
         B = cross(N, T);
     }
 
-    output.uv = GetVertexAttribute<float2>(mesh.buffer, mesh.triangleMesh.texCoords, vertexId);
+    output.uv = GetVertexAttribute<float2>(gltfBuffer, mesh.triangleMesh.texCoords, vertexId);
     output.worldPos = mul(float4(pos, 1.0f), pushConstants.transform).xyz;
     output.sv_position = mul(float4(output.worldPos, 1.0f), sceneInfo->viewProj);
     output.T = T;

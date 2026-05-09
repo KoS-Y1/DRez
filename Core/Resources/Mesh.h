@@ -16,9 +16,10 @@ class Mesh {
 public:
     Mesh() = default;
 
-    Mesh(const shader_io::MeshInfo &mesh,  std::string name)
+    Mesh(const shader_io::MeshInfo &mesh, std::string name, D3D12_GPU_VIRTUAL_ADDRESS gltfBufferAddress)
         : m_mesh(mesh)
-        , m_name(std::move(name)) {};
+        , m_name(std::move(name))
+        , m_gltfBufferAddress(gltfBufferAddress) {};
 
     Mesh(const Mesh &)            = delete;
     Mesh &operator=(const Mesh &) = delete;
@@ -36,7 +37,8 @@ public:
     [[nodiscard]] const D3D12_INDEX_BUFFER_VIEW &GetIndexBufferView() const { return m_indexBufferView; }
 
 private:
-    shader_io::MeshInfo     m_mesh{};
-    std::string             m_name{};
-    D3D12_INDEX_BUFFER_VIEW m_indexBufferView{};
+    shader_io::MeshInfo       m_mesh{};
+    std::string               m_name{};
+    D3D12_GPU_VIRTUAL_ADDRESS m_gltfBufferAddress{};
+    D3D12_INDEX_BUFFER_VIEW   m_indexBufferView{};
 };

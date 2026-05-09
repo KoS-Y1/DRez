@@ -7,6 +7,7 @@
 #include "DXGraphicsPipeline.h"
 
 #include <array>
+#include <atomic>
 #include <mutex>
 
 #include <directx/d3d12.h>
@@ -100,6 +101,8 @@ public:
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetShaderResourceViewHandle(int32_t index);
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetSamplerHandle(int32_t index);
 
+    uint32_t AllocateBindlessIndex() { return m_nextBindlessIndex.fetch_add(1, std::memory_order_relaxed); }
+
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -138,6 +141,7 @@ private:
     uint32_t                                     m_dsvDescriptorSize{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descriptorHeap{};
     uint32_t                                     m_descriptorSize{};
+    std::atomic<uint32_t>                        m_nextBindlessIndex{0};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap{};
     uint32_t                                     m_samplerDescriptorSize{};
 

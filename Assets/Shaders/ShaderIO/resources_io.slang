@@ -42,7 +42,7 @@ SLANG_PUBLIC struct MaterialInfo
 
 SLANG_PUBLIC struct MeshInfo
 {
-    SLANG_PUBLIC uint32_t gltfHandle;
+    SLANG_PUBLIC uint32_t gltfBufferIndex;
     SLANG_PUBLIC TriangleMesh triangleMesh;
     SLANG_PUBLIC int indexType;
 };
@@ -57,9 +57,10 @@ SLANG_PUBLIC struct GlobalSceneInfo
 {
     SLANG_PUBLIC float4x4 viewProj;
 
-    SLANG_PUBLIC InstanceInfo *instances;
-    SLANG_PUBLIC MeshInfo *meshes;
-    SLANG_PUBLIC MaterialInfo *materials;
+    SLANG_PUBLIC uint32_t instancesIndex;
+    SLANG_PUBLIC uint32_t meshesIndex;
+    SLANG_PUBLIC uint32_t materialsIndex;
+    uint32_t padding;
 };
 
 };
