@@ -27,7 +27,9 @@ DXBuffer::DXBuffer(const DXApp &app, D3D12_HEAP_TYPE heapType, D3D12_HEAP_FLAGS 
 }
 
 DXBuffer::~DXBuffer() {
-    m_buffer->Unmap(0, nullptr);
+    if (m_buffer && m_mappedData) {
+        m_buffer->Unmap(0, nullptr);
+    }
 }
 
 void DXBuffer::Upload(uint64_t size, const void *data) {

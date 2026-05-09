@@ -9,4 +9,5 @@
 
 namespace drez::dx_utils {
 uint32_t GetFormatSize(DXGI_FORMAT format);
+bool IsDepthStencilFormat(DXGI_FORMAT format);
 }

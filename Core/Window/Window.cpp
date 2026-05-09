@@ -27,7 +27,6 @@ Window::Window()
     SDL_SetWindowMinimumSize(m_window, kMinWindowWidth, kMinWindowHeight);
 
     m_dxApp = std::make_unique<DXApp>(GetHWND());
-    m_renderer = std::make_unique<Renderer>(*m_dxApp);
 }
 
 Window::~Window() {
@@ -35,6 +34,8 @@ Window::~Window() {
 }
 
 void Window::Run() {
+    m_renderer = std::make_unique<Renderer>(*m_dxApp);
+
     DebugInfo("SDL_Window running");
 
     m_running = true;

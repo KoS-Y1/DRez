@@ -119,4 +119,15 @@ uint32_t GetFormatSize(DXGI_FORMAT format) {
         return 0;
     }
 }
+
+bool IsDepthStencilFormat(DXGI_FORMAT format) {
+    switch (format) {
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+    case DXGI_FORMAT_D32_FLOAT:
+        return true;
+    default:
+        return false;
+    }
+}
 } // namespace drez::dx_utils

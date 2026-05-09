@@ -39,5 +39,5 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_buffer;
     uint64_t                               m_bufferSize{};
 
-    [[maybe_unused]] void *m_mappedData{};
+    void *m_mappedData{};
 };

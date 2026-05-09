@@ -194,13 +194,13 @@ void ResourceManager::Init(DXApp &app) {
 
 uint32_t ResourceManager::GetMeshHandle(const Key &key) const {
     auto pair = m_meshLookup.find(key);
-    DebugCheckCritical(pair != m_meshLookup.end(), "{} not exists", key);
+    DebugCheckCritical(pair != m_meshLookup.end(), "Mesh {} does not exist", key);
     return pair->second;
 }
 
 uint32_t ResourceManager::GetMaterialHandle(const Key &key) const {
     auto pair = m_materialLookup.find(key);
-    DebugCheckCritical(pair != m_materialLookup.end(), "{} not exists", key);
+    DebugCheckCritical(pair != m_materialLookup.end(), "Material {} does not exist", key);
     return pair->second;
 }
 

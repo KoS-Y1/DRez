@@ -7,20 +7,20 @@
 #include <directx/d3dx12.h>
 
 #include "DXApp.h"
+#include "DXUtils.h"
 #include "Debug.h"
 
-
 DXTexture::DXTexture(
-    DXApp                    &app,
-    uint64_t                  width,
-    uint32_t                  height,
-    DXGI_FORMAT               format,
-    uint32_t                  formatSize,
-    D3D12_RESOURCE_FLAGS      resourceFlags,
-    D3D12_HEAP_FLAGS          heapFlags,
-    D3D12_SAMPLER_DESC        sampler,
-    const void               *data,
-    std::string               name
+    DXApp               &app,
+    uint64_t             width,
+    uint32_t             height,
+    DXGI_FORMAT          format,
+    uint32_t             formatSize,
+    D3D12_RESOURCE_FLAGS resourceFlags,
+    D3D12_HEAP_FLAGS     heapFlags,
+    D3D12_SAMPLER_DESC   sampler,
+    const void          *data,
+    std::string          name
 )
     : m_name(std::move(name))
     , m_format(format)
@@ -36,11 +36,14 @@ DXTexture::DXTexture(
         .Flags            = resourceFlags
     };
     CD3DX12_HEAP_PROPERTIES heapProperties{D3D12_HEAP_TYPE_DEFAULT};
-    HRESULT                 result =
-        app.GetDevice()->CreateCommittedResource(&heapProperties, heapFlags, &desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_texture));
-    DebugCheckCritical(SUCCEEDED(result), "Failed to create texture resource {}", m_name);
+
 
     if (data) {
+        HRESULT result =
+            app.GetDevice()
+                ->CreateCommittedResource(&heapProperties, heapFlags, &desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_texture));
+        DebugCheckCritical(SUCCEEDED(result), "Failed to create texture resource {}", m_name);
+
         D3D12_SUBRESOURCE_DATA textureData{
             .pData      = data,
             .RowPitch   = static_cast<int64_t>(formatSize * width),
@@ -58,12 +61,24 @@ DXTexture::DXTexture(
         app.ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {
             UpdateSubresources(commandList, m_texture.Get(), stagingBuffer.GetBuffer(), 0, 0, 1, &textureData);
 
-            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-                m_texture.Get(),
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-            );
+            auto barrier =
+                CD3DX12_RESOURCE_BARRIER::Transition(m_texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             commandList->ResourceBarrier(1, &barrier);
         });
+    } else {
+        D3D12_CLEAR_VALUE clearValue{.Format = m_format};
+        if (drez::dx_utils::IsDepthStencilFormat(m_format)) {
+            clearValue.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{.Depth = 1.0f, .Stencil = 0};
+        }
+        else {
+            clearValue.Color[0] = 0.0f;
+            clearValue.Color[1] = 0.0f;
+            clearValue.Color[2] = 0.0f;
+            clearValue.Color[3] = 1.0f;
+        }
+        HRESULT result =
+            app.GetDevice()
+                ->CreateCommittedResource(&heapProperties, heapFlags, &desc, D3D12_RESOURCE_STATE_COMMON, &clearValue, IID_PPV_ARGS(&m_texture));
+        DebugCheckCritical(SUCCEEDED(result), "Failed to create texture resource {}", m_name);
     }
 }

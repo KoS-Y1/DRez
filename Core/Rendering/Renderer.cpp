@@ -39,7 +39,7 @@ Renderer::Renderer(DXApp &app)
         }
         {
             uint32_t            meshHandle     = ResourceManager::GetInstance().GetMeshHandle("King_Shared");
-            uint32_t            materialHandle = ResourceManager::GetInstance().GetMaterialHandle("King_Shared");
+            uint32_t            materialHandle = ResourceManager::GetInstance().GetMaterialHandle("King_Black");
             DirectX::XMFLOAT4X4 identity =
                 DirectX::XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 
