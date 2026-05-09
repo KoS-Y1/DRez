@@ -22,15 +22,15 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 
     uint instanceId = instanceIndex + baseInstance;
 
-    shader_io::GlobalSceneInfo *sceneInfo = pushConstants.sceneInfo;
-
-    StructuredBuffer<shader_io::InstanceInfo> instances = ResourceDescriptorHeap[sceneInfo->instancesIndex];
-    StructuredBuffer<shader_io::MeshInfo> meshes = ResourceDescriptorHeap[sceneInfo->meshesIndex];
+    StructuredBuffer<shader_io::InstanceInfo> instances =
+        (DescriptorHandle<StructuredBuffer<shader_io::InstanceInfo>>)uint2(pushConstants.instancesIndex, 0);
+    StructuredBuffer<shader_io::MeshInfo> meshes =
+        (DescriptorHandle<StructuredBuffer<shader_io::MeshInfo>>)uint2(pushConstants.meshesIndex, 0);
 
     const shader_io::InstanceInfo instance = instances[instanceId];
     const shader_io::MeshInfo mesh = meshes[instance.meshHandle];
 
-    ByteAddressBuffer gltfBuffer = ResourceDescriptorHeap[mesh.gltfBufferIndex];
+    ByteAddressBuffer gltfBuffer = (DescriptorHandle<ByteAddressBuffer>)uint2(mesh.gltfBufferIndex, 0);
 
     const float3 pos = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.positions, vertexId);
     const float4 tangent = GetVertexAttribute<float4>(gltfBuffer, mesh.triangleMesh.tangents, vertexId);
@@ -57,7 +57,7 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 
     output.uv = GetVertexAttribute<float2>(gltfBuffer, mesh.triangleMesh.texCoords, vertexId);
     output.worldPos = mul(float4(pos, 1.0f), pushConstants.transform).xyz;
-    output.sv_position = mul(float4(output.worldPos, 1.0f), sceneInfo->viewProj);
+    output.sv_position = mul(float4(output.worldPos, 1.0f), pushConstants.viewProj);
     output.T = T;
     output.B = B;
     output.N = N;

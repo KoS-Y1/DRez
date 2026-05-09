@@ -137,7 +137,7 @@ ShaderCompiler::ShaderCompiler() {
 
     const slang::TargetDesc target{
         .format  = SLANG_DXIL,
-        .profile = m_globalSession->findProfile("sm_6_9"),
+        .profile = m_globalSession->findProfile("sm_6_8"),
     };
 
 #if defined(NDEBUG)

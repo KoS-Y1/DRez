@@ -51,12 +51,10 @@ private:
     std::vector<shader_io::InstanceInfo> m_instances{};
     std::vector<DirectX::XMFLOAT4X4>     m_instanceTransforms{};
 
-    std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight>  m_globalUniforms{};
-    std::array<shader_io::GlobalSceneInfo, DXApp::kMaxFramesInFlight> m_globalSceneInfos{};
+    std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
 
-    std::array<DXBuffer, DXApp::kMaxFramesInFlight> m_sceneBuffers{};
-    DXBuffer                                        m_instanceBuffer{};
-    uint32_t                                        m_instanceBufferIndex{};
+    DXBuffer m_instanceBuffer{};
+    uint32_t m_instanceBufferIndex{};
 
     DXTexture m_finalTexture{};
     int32_t   m_finalTextureRtvOffset{};

@@ -87,23 +87,12 @@ Renderer::Renderer(DXApp &app)
         m_app.CreateShaderResourceView(m_instanceBuffer.GetBuffer(), m_instanceBufferIndex, desc);
     }
 
-    // Global scene info and global uniform
+    // Global uniforms
     {
-        for (uint32_t i = 0; i < m_globalSceneInfos.size(); ++i) {
-            auto &info          = m_globalSceneInfos[i];
-            info.instancesIndex = m_instanceBufferIndex;
-            info.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
-            info.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
-
-            m_sceneBuffers[i] = m_app.CreateBuffer(
-                D3D12_HEAP_TYPE_UPLOAD,
-                D3D12_HEAP_FLAG_NONE,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                sizeof(shader_io::GlobalSceneInfo),
-                "scene_buffer_" + std::to_string(i)
-            );
-
-            m_globalUniforms[i].sceneInfo = reinterpret_cast<shader_io::GlobalSceneInfo *>(m_sceneBuffers[i].GetGPUVirtualAddress());
+        for (auto &uniforms: m_globalUniforms) {
+            uniforms.instancesIndex = m_instanceBufferIndex;
+            uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
+            uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         }
     }
 
@@ -198,12 +187,10 @@ void Renderer::Render() {
 void Renderer::Update(const FrameInfo &frameInfo) {
     const uint32_t frameIndex = frameInfo.frameIndex;
 
-    // Update global scene info
+    // Update global uniforms
     {
         // TODO: load with actual camera
         DirectX::FXMMATRIX viewProj = DirectX::XMMatrixMultiply(DirectX::XMMatrixIdentity(), DirectX::XMMatrixIdentity());
-        DirectX::XMStoreFloat4x4(&m_globalSceneInfos[frameIndex].viewProj, viewProj);
-
-        m_sceneBuffers[frameIndex].Upload(sizeof(shader_io::GlobalSceneInfo), &m_globalSceneInfos);
+        DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
     }
 }

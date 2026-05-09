@@ -9,6 +9,7 @@ if(WIN32)
 endif()
 
 find_package(directx-headers CONFIG REQUIRED)
+find_package(directx-dxc CONFIG REQUIRED)
 find_package(directxmath CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(sdl3 CONFIG REQUIRED)
@@ -30,4 +31,11 @@ add_executable(DRez
 target_link_libraries(DRez PUBLIC
         Window
         Resources
+)
+
+# dxil.dll signs DXIL produced by Slang at runtime; D3D12 rejects unsigned blobs.
+add_custom_command(TARGET DRez POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:Microsoft::DXIL>
+        $<TARGET_FILE_DIR:DRez>
 )
