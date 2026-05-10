@@ -287,7 +287,12 @@ bool ShaderCompiler::Compile(const std::string &filePath) {
         const uint32_t                 spaceIndex   = variable->getBindingSpace(category);
         const D3D12_SHADER_VISIBILITY  visibility   = ResolveVisibility(entryMetadata, entryStages, category, spaceIndex, bindingIndex);
 
-        if (category == slang::ParameterCategory::PushConstantBuffer) {
+        // Slang's DXIL backend ignores [[vk::push_constant]] and reports the variable as a normal CBV
+        // (PushConstantBuffer category is GLSL/SPIR-V only). Detect root-constants by variable name instead.
+        const char *const varName            = variable->getName();
+        const bool        isPushConstants    = varName && std::strcmp(varName, "pushConstants") == 0;
+
+        if (isPushConstants || category == slang::ParameterCategory::PushConstantBuffer) {
             slang::TypeLayoutReflection * const typeLayout    = variable->getTypeLayout();
             slang::TypeLayoutReflection * const elementLayout = typeLayout->getElementTypeLayout();
             const size_t   bytes  = elementLayout ? elementLayout->getSize() : typeLayout->getSize();
