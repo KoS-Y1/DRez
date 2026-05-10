@@ -120,6 +120,15 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         m_app.CreateRenderTargetView(m_deferredTexture.GetResource(), rtvOffset);
         m_deferredTextureRtvOffset = rtvOffset++;
 
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                m_deferredTexture.GetResource(),
+                D3D12_RESOURCE_STATE_COMMON,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            );
+            commandList->ResourceBarrier(1, &barrier);
+        });
+
         m_depthTexture = m_app.CreateTexture(
             m_width,
             m_height,
@@ -187,7 +196,7 @@ void Renderer::Render() {
 
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_deferredTexture.GetResource(),
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_RENDER_TARGET
         );
         commandList->ResourceBarrier(1, &barrier);
