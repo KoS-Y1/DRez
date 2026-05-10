@@ -83,17 +83,17 @@ public:
     }
 
     [[nodiscard]] DXTexture CreateTexture(
-        uint64_t             width,
-        uint32_t             height,
-        DXGI_FORMAT          format,
-        uint32_t             formatSize,
-        D3D12_RESOURCE_FLAGS resourceFlags,
-        D3D12_HEAP_FLAGS     heapFlags,
-        D3D12_SAMPLER_DESC   sampler,
-        const void          *data,
-        std::string          name
+        uint64_t                width,
+        uint32_t                height,
+        DXGI_FORMAT             format,
+        uint32_t                formatSize,
+        D3D12_RESOURCE_FLAGS    resourceFlags,
+        D3D12_HEAP_FLAGS        heapFlags,
+        shader_io::SamplerType  samplerType,
+        const void             *data,
+        std::string             name
     ) {
-        return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, sampler, data, name};
+        return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, samplerType, data, name};
     }
 
     [[nodiscard]] DXShaderResourceView CreateDXShaderResourceView(ID3D12Resource *resource, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
@@ -110,12 +110,10 @@ public:
     void CreateDepthStencilView(ID3D12Resource *resource, int32_t index);
     void CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc);
     void CreateUnorderedAccessView(ID3D12Resource *resource, int32_t index, const D3D12_UNORDERED_ACCESS_VIEW_DESC &desc);
-    void CreateSampler(const D3D12_SAMPLER_DESC &desc, int32_t index);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetRenderTargetViewHandle(int32_t index);
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetDepthStencilViewHandle(int32_t index);
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle(int32_t index);
-    CD3DX12_CPU_DESCRIPTOR_HANDLE GetSamplerHandle(int32_t index);
 
     uint32_t AllocateBindlessIndex() { return m_nextBindlessIndex.fetch_add(1, std::memory_order_relaxed); }
 
@@ -158,8 +156,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descriptorHeap{};
     uint32_t                                     m_descriptorSize{};
     std::atomic<uint32_t>                        m_nextBindlessIndex{0};
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_samplerHeap{};
-    uint32_t                                     m_samplerDescriptorSize{};
 
     bool m_resourcesBound{false};
 

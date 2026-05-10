@@ -93,18 +93,6 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         int32_t rtvOffset{0};
         int32_t dsvOffset{0};
 
-        const D3D12_SAMPLER_DESC defaultSampler{
-            .Filter         = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-            .AddressU       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            .AddressV       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-            .MipLODBias     = 0.0f,
-            .MaxAnisotropy  = 1,
-            .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
-            .MinLOD         = 0.0f,
-            .MaxLOD         = D3D12_FLOAT32_MAX,
-        };
-
         m_deferredTexture = m_app.CreateTexture(
             m_width,
             m_height,
@@ -112,7 +100,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
             D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
             D3D12_HEAP_FLAG_NONE,
-            defaultSampler,
+            shader_io::SamplerType::Linear,
             nullptr,
             "deferred_texture"
         );
@@ -142,7 +130,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             drez::dx_utils::GetFormatSize(DXGI_FORMAT_D32_FLOAT),
             D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
             D3D12_HEAP_FLAG_NONE,
-            defaultSampler,
+            shader_io::SamplerType::Nearest,
             nullptr,
             "depth_texture"
         );
@@ -162,7 +150,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
             D3D12_HEAP_FLAG_NONE,
-            defaultSampler,
+            shader_io::SamplerType::Nearest,
             nullptr,
             "composed_texture"
         );
@@ -187,8 +175,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         }
 
-        m_blitUniforms.srcIndex = m_deferredTextureSrv.GetIndex();
-        m_blitUniforms.dstIndex = m_composedTextureUav.GetIndex();
+        m_blitUniforms.srcIndex    = m_deferredTextureSrv.GetIndex();
+        m_blitUniforms.dstIndex    = m_composedTextureUav.GetIndex();
+        m_blitUniforms.samplerType = m_deferredTexture.GetSamplerType();
     }
 }
 

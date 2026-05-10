@@ -28,8 +28,9 @@ SLANG_PUBLIC struct GlobalUniforms
 
 SLANG_PUBLIC struct BlitUniforms
 {
-    SLANG_PUBLIC uint32_t srcIndex;
-    SLANG_PUBLIC uint32_t dstIndex;
-    uint32_t paddings[2];
+    SLANG_PUBLIC uint32_t    srcIndex;
+    SLANG_PUBLIC uint32_t    dstIndex;
+    SLANG_PUBLIC SamplerType samplerType;
+    uint32_t padding;
 };
 }

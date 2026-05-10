@@ -198,33 +198,19 @@ std::optional<std::tuple<int, int, unsigned char *>> LoadImage(const std::string
     return std::make_tuple(width, height, data);
 }
 
-D3D12_SAMPLER_DESC LoadSampler(const fastgltf::Sampler &sampler) {
-    auto extractFilter = [](const fastgltf::Filter &filter) {
-        switch (filter) {
-        case fastgltf::Filter::Nearest:
-        case fastgltf::Filter::NearestMipMapNearest:
-        case fastgltf::Filter::NearestMipMapLinear:
-            return D3D12_FILTER_MIN_MAG_MIP_POINT;
+shader_io::SamplerType LoadSampler(const fastgltf::Sampler &sampler) {
+    switch (sampler.magFilter.value_or(fastgltf::Filter::Nearest)) {
+    case fastgltf::Filter::Linear:
+    case fastgltf::Filter::LinearMipMapNearest:
+    case fastgltf::Filter::LinearMipMapLinear:
+        return shader_io::SamplerType::Linear;
 
-        case fastgltf::Filter::Linear:
-        case fastgltf::Filter::LinearMipMapNearest:
-        case fastgltf::Filter::LinearMipMapLinear:
-        default:
-            return D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-        }
-    };
-
-    return D3D12_SAMPLER_DESC{
-        .Filter         = extractFilter(sampler.magFilter.value_or(fastgltf::Filter::Nearest)),
-        .AddressU       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .AddressV       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .MipLODBias     = 0.0f,
-        .MaxAnisotropy  = 1u,
-        .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
-        .MinLOD         = 0.0f,
-        .MaxLOD         = D3D12_FLOAT32_MAX
-    };
+    case fastgltf::Filter::Nearest:
+    case fastgltf::Filter::NearestMipMapNearest:
+    case fastgltf::Filter::NearestMipMapLinear:
+    default:
+        return shader_io::SamplerType::Nearest;
+    }
 }
 
 shader_io::MaterialInfo LoadMaterial(const fastgltf::Material &material) {

@@ -11,20 +11,20 @@
 #include "Debug.h"
 
 DXTexture::DXTexture(
-    DXApp               &app,
-    uint64_t             width,
-    uint32_t             height,
-    DXGI_FORMAT          format,
-    uint32_t             formatSize,
-    D3D12_RESOURCE_FLAGS resourceFlags,
-    D3D12_HEAP_FLAGS     heapFlags,
-    D3D12_SAMPLER_DESC   sampler,
-    const void          *data,
-    std::string          name
+    DXApp                  &app,
+    uint64_t                width,
+    uint32_t                height,
+    DXGI_FORMAT             format,
+    uint32_t                formatSize,
+    D3D12_RESOURCE_FLAGS    resourceFlags,
+    D3D12_HEAP_FLAGS        heapFlags,
+    shader_io::SamplerType  samplerType,
+    const void             *data,
+    std::string             name
 )
     : m_name(std::move(name))
     , m_format(format)
-    , m_sampler(std::move(sampler)) {
+    , m_samplerType(samplerType) {
     bool isDepthStencil = drez::dx_utils::IsDepthStencilFormat(m_format);
 
     {

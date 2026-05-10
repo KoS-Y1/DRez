@@ -282,6 +282,11 @@ bool ShaderCompiler::Compile(const std::string &filePath) {
     for (uint32_t i = 0; i < fieldCount; ++i) {
         slang::VariableLayoutReflection * const variable = globalTypeLayout->getFieldByIndex(i);
 
+        // SamplerState fields are baked into the root signature as static samplers, so skip reflection here.
+        if (variable->getTypeLayout()->getKind() == slang::TypeReflection::Kind::SamplerState) {
+            continue;
+        }
+
         const slang::ParameterCategory category     = variable->getCategory();
         const uint32_t                 bindingIndex = variable->getBindingIndex();
         const uint32_t                 spaceIndex   = variable->getBindingSpace(category);

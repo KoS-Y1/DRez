@@ -11,6 +11,12 @@ implementing ShaderIO;
 
 namespace shader_io
 {
+SLANG_PUBLIC enum class SamplerType : uint32_t
+{
+    Nearest = 0,
+    Linear  = 1,
+};
+
 SLANG_PUBLIC struct BufferView
 {
     SLANG_PUBLIC uint32_t offset;
@@ -33,6 +39,11 @@ SLANG_PUBLIC struct MaterialInfo
     SLANG_PUBLIC int ormTextureIndex = -1;
     SLANG_PUBLIC int emissiveTextureIndex = -1;
     SLANG_PUBLIC int normalTextureIndex = -1;
+
+    SLANG_PUBLIC SamplerType albedoSamplerType;
+    SLANG_PUBLIC SamplerType ormSamplerType;
+    SLANG_PUBLIC SamplerType emissiveSamplerType;
+    SLANG_PUBLIC SamplerType normalSamplerType;
 
     SLANG_PUBLIC float3 albedoFactor;
     SLANG_PUBLIC float metallicFactor;

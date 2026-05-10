@@ -15,6 +15,6 @@ std::optional<fastgltf::Asset>     LoadGltf(std::string_view path);
 std::optional<shader_io::MeshInfo> LoadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh, uint32_t gltfBufferIndex);
 std::optional<std::tuple<int, int, unsigned char *>> LoadImage(std::string_view path, const fastgltf::Asset &asset, const fastgltf::Image &image);
 std::optional<std::tuple<int, int, unsigned char *>> LoadImage(const std::string &path); // Load pure image
-D3D12_SAMPLER_DESC                                   LoadSampler(const fastgltf::Sampler &sampler);
+shader_io::SamplerType                               LoadSampler(const fastgltf::Sampler &sampler);
 shader_io::MaterialInfo                              LoadMaterial(const fastgltf::Material &material);
 } // namespace drez::file_system

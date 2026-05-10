@@ -9,22 +9,24 @@
 #include <directx/d3d12.h>
 #include <wrl/client.h>
 
+#include "resources_io.slang"
+
 class DXApp;
 
 class DXTexture {
 public:
     DXTexture() = default;
     DXTexture(
-        DXApp               &app,
-        uint64_t             width,
-        uint32_t             height,
-        DXGI_FORMAT          format,
-        uint32_t             formatSize,
-        D3D12_RESOURCE_FLAGS resourceFlags,
-        D3D12_HEAP_FLAGS     heapFlags,
-        D3D12_SAMPLER_DESC   sampler,
-        const void          *data,
-        std::string          name
+        DXApp                  &app,
+        uint64_t                width,
+        uint32_t                height,
+        DXGI_FORMAT             format,
+        uint32_t                formatSize,
+        D3D12_RESOURCE_FLAGS    resourceFlags,
+        D3D12_HEAP_FLAGS        heapFlags,
+        shader_io::SamplerType  samplerType,
+        const void             *data,
+        std::string             name
     );
 
     DXTexture(const DXTexture &)            = delete;
@@ -40,12 +42,12 @@ public:
 
     [[nodiscard]] DXGI_FORMAT GetFormat() const { return m_format; }
 
-    [[nodiscard]] const D3D12_SAMPLER_DESC &GetSampler() const { return m_sampler; }
+    [[nodiscard]] shader_io::SamplerType GetSamplerType() const { return m_samplerType; }
 
 private:
     std::string m_name{};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture{};
     DXGI_FORMAT                            m_format{DXGI_FORMAT_UNKNOWN};
-    D3D12_SAMPLER_DESC                     m_sampler{};
+    shader_io::SamplerType                 m_samplerType{shader_io::SamplerType::Nearest};
 };

@@ -199,11 +199,6 @@ DXApp::DXApp(HWND hwnd) {
         result              = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_descriptorHeap));
         DebugCheckCritical(SUCCEEDED(result), "Failed to create descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
         m_descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-        result    = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_samplerHeap));
-        DebugCheckCritical(SUCCEEDED(result), "Failed to create sampler descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
-        m_samplerDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     }
 
     // Swapchain images
@@ -225,7 +220,7 @@ FrameInfo DXApp::BeginFrame() {
 
     AcquireNextFrame();
 
-    const std::vector<ID3D12DescriptorHeap *> heaps{m_descriptorHeap.Get(), m_samplerHeap.Get()};
+    const std::vector<ID3D12DescriptorHeap *> heaps{m_descriptorHeap.Get()};
     m_commandLists[m_frameIndex]->SetDescriptorHeaps(heaps.size(), heaps.data());
 
     return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get(), .frameIndex = m_frameIndex};
@@ -283,11 +278,6 @@ void DXApp::CreateUnorderedAccessView(ID3D12Resource *resource, int32_t index, c
     m_device->CreateUnorderedAccessView(resource, nullptr, &desc, handle);
 }
 
-void DXApp::CreateSampler(const D3D12_SAMPLER_DESC &desc, int32_t index) {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE samplerHandle = GetSamplerHandle(index);
-    m_device->CreateSampler(&desc, samplerHandle);
-}
-
 CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetRenderTargetViewHandle(int32_t index) {
     return {m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), index, m_rtvDescriptorSize};
 }
@@ -298,10 +288,6 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDepthStencilViewHandle(int32_t index) {
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDescriptorHandle(int32_t index) {
     return {m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(), index, m_descriptorSize};
-}
-
-CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetSamplerHandle(int32_t index) {
-    return {m_samplerHeap->GetCPUDescriptorHandleForHeapStart(), index, m_samplerDescriptorSize};
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {

@@ -25,18 +25,6 @@ void ResourceManager::Init(DXApp &app) {
         }
     }
 
-    const D3D12_SAMPLER_DESC defaultSampler{
-        .Filter         = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-        .AddressU       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .AddressV       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .MipLODBias     = 0.0f,
-        .MaxAnisotropy  = 1,
-        .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
-        .MinLOD         = 0.0f,
-        .MaxLOD         = D3D12_FLOAT32_MAX,
-    };
-
     // Load and create skybox textures and material
     // {
     //     std::vector<Key> keys = drez::file_system::GetFilesWithExtension("../Assets/Models/Skybox", ".png");
@@ -311,22 +299,10 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     }
 
     // Load samplers
-    std::vector<D3D12_SAMPLER_DESC> infoSamplers(asset->samplers.size());
+    std::vector<shader_io::SamplerType> infoSamplers(asset->samplers.size());
     for (size_t i = 0; i < asset->samplers.size(); ++i) {
         ThreadPool::GetInstance().Enqueue([&, i]() { infoSamplers[i] = drez::file_system::LoadSampler(asset->samplers[i]); });
     }
-
-    const D3D12_SAMPLER_DESC defaultSampler{
-        .Filter         = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-        .AddressU       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .AddressV       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .AddressW       = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        .MipLODBias     = 0.0f,
-        .MaxAnisotropy  = 1,
-        .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
-        .MinLOD         = 0.0f,
-        .MaxLOD         = D3D12_FLOAT32_MAX,
-    };
 
     // Load images
     std::vector<std::tuple<int, int, unsigned char *>> images(asset->images.size());
@@ -388,7 +364,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
                 D3D12_RESOURCE_FLAG_NONE,
                 D3D12_HEAP_FLAG_NONE,
-                texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : defaultSampler,
+                texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : shader_io::SamplerType::Nearest,
                 std::get<2>(images[imageIndex]),
                 key
             );
@@ -419,6 +395,15 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
         return static_cast<int32_t>(textureBindlessIndices[index]);
     };
 
+    // Resolve sampler type for a gltf-local texture index
+    const auto toSamplerType = [&asset, &infoSamplers](int32_t index) -> shader_io::SamplerType {
+        if (index == -1) {
+            return shader_io::SamplerType::Nearest;
+        }
+        const fastgltf::Texture &texture = asset->textures[index];
+        return texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : shader_io::SamplerType::Nearest;
+    };
+
     // Load materials
     uint32_t materialHandle{};
     m_materialInfo.reserve(m_textures.size() + asset->materials.size());
@@ -435,6 +420,11 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             if (pair != m_materialLookup.end()) {
                 key += "_copy";
             }
+
+            materialInfo.albedoSamplerType   = toSamplerType(materialInfo.albedoTextureIndex);
+            materialInfo.ormSamplerType      = toSamplerType(materialInfo.ormTextureIndex);
+            materialInfo.emissiveSamplerType = toSamplerType(materialInfo.emissiveTextureIndex);
+            materialInfo.normalSamplerType   = toSamplerType(materialInfo.normalTextureIndex);
 
             materialInfo.albedoTextureIndex   = toBindlessIndex(materialInfo.albedoTextureIndex);
             materialInfo.ormTextureIndex      = toBindlessIndex(materialInfo.ormTextureIndex);

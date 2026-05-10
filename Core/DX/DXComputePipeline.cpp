@@ -19,14 +19,18 @@ DXComputePipeline::DXComputePipeline(DXApp &app, std::string_view filePath) {
     {
         std::vector<CD3DX12_ROOT_PARAMETER1> rootParams = ShaderCompiler::GetInstance().GetRootParameters(config.shader);
 
+        const std::vector<CD3DX12_STATIC_SAMPLER_DESC> staticSamplers{
+            CD3DX12_STATIC_SAMPLER_DESC{0, D3D12_FILTER_MIN_MAG_MIP_POINT},
+            CD3DX12_STATIC_SAMPLER_DESC{1, D3D12_FILTER_MIN_MAG_MIP_LINEAR},
+        };
+
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc{};
         desc.Init_1_1(
             rootParams.size(),
             rootParams.data(),
-            0,
-            nullptr,
-            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |
-                D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
+            staticSamplers.size(),
+            staticSamplers.data(),
+            D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
         );
 
         ComPtr<ID3DBlob> signature{};
