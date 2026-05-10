@@ -150,9 +150,9 @@ Renderer::Renderer(DXApp &app)
         });
     }
 
-    // TODO: bindless descriptor for textures
-    {
-    }
+        // std::ranges::for_each(m_globaluniforms, [](shader_io::globaluniforms &uniforms) {
+        //     uniforms.color = directx::xmfloat4(1.0f, 1.0f, 1.0f, 1.0f);
+        // });
 }
 
 void Renderer::Render() {
@@ -186,6 +186,7 @@ void Renderer::Render() {
             m_globalUniforms[frameIndex].transform    = m_instanceTransforms[i];
             // TODO: inverse transpose to get the actual uniforms
             m_globalUniforms[frameIndex].normalMatrix = m_instanceTransforms[i];
+            commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &m_globalUniforms[frameIndex], 0);
 
             const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(m_instances[i].meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;

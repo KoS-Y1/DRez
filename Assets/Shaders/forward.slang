@@ -70,4 +70,5 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 float4 pixelMain(VSOut input) : SV_Target
 {
     return float4(input.uv, 0.0f, 1.0f);
+    // return pushConstants.color;
 }

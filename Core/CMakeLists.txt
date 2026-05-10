@@ -54,6 +54,8 @@ target_link_libraries(ShaderCompiler PUBLIC
 add_library(Rendering
         Rendering/Renderer.cpp
         Rendering/Renderer.h
+        Rendering/Camera.cpp
+        Rendering/Camera.h
 )
 target_include_directories(Rendering PUBLIC Rendering)
 target_link_libraries(Rendering PUBLIC

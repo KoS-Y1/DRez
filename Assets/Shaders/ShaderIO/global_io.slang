@@ -21,5 +21,6 @@ SLANG_PUBLIC struct GlobalUniforms
     SLANG_PUBLIC uint32_t meshesIndex;
     SLANG_PUBLIC uint32_t materialsIndex;
     uint32_t padding;
+    // SLANG_PUBLIC float4 color;
 };
 }
