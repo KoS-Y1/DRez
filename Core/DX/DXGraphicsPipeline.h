@@ -25,6 +25,7 @@ public:
     ~DXGraphicsPipeline() = default;
 
     [[nodiscard]] std::string_view GetName() const { return m_name; }
+
     [[nodiscard]] ID3D12RootSignature *GetRootSignature() const { return m_rootSignature.Get(); }
 
     [[nodiscard]] ID3D12PipelineState *GetPipelineState() const { return m_pipelineState.Get(); }

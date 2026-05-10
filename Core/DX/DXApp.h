@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "DXGraphicsPipeline.h"
 
 #include <array>
 #include <atomic>
@@ -15,6 +14,8 @@
 #include <wrl/client.h>
 
 #include "DXBuffer.h"
+#include "DXComputePipeline.h"
+#include "DXGraphicsPipeline.h"
 #include "DXTexture.h"
 
 #include <directx/d3dx12_root_signature.h>
@@ -66,6 +67,8 @@ public:
 
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
+
+    [[nodiscard]] DXComputePipeline CreateComputePipeline(std::string_view name) { return DXComputePipeline(*this, name); }
 
     [[nodiscard]] DXBuffer CreateBuffer(
         D3D12_HEAP_TYPE       heapType,

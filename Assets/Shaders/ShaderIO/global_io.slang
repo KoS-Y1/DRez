@@ -12,6 +12,9 @@ implementing ShaderIO;
 
 namespace shader_io
 {
+SLANG_PUBLIC static const uint32_t kBlitThreadX = 8;
+SLANG_PUBLIC static const uint32_t kBlitThreadY = 8;
+
 SLANG_PUBLIC struct GlobalUniforms
 {
     SLANG_PUBLIC float4x4 transform;
@@ -21,6 +24,12 @@ SLANG_PUBLIC struct GlobalUniforms
     SLANG_PUBLIC uint32_t meshesIndex;
     SLANG_PUBLIC uint32_t materialsIndex;
     uint32_t padding;
-    // SLANG_PUBLIC float4 color;
+};
+
+SLANG_PUBLIC struct BlitUniforms
+{
+    SLANG_PUBLIC uint32_t srcIndex;
+    SLANG_PUBLIC uint32_t dstIndex;
+    uint32_t paddings[2];
 };
 }

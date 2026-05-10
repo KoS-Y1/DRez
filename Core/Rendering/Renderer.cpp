@@ -22,8 +22,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     , m_rect(CD3DX12_RECT{0, 0, static_cast<int32_t>(m_width), static_cast<int32_t>(m_height)}) {
     // Load pipelines
     {
-        // TODO: test for now
         m_forward = m_app.CreateGraphicsPipeline("../Assets/Shaders/forward.json");
+
+        m_blit = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
     }
 
     // Load instances
@@ -79,24 +80,14 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             .Buffer                  = {
-                                 .FirstElement        = 0,
-                                 .NumElements         = static_cast<uint32_t>(m_instances.size()),
-                                 .StructureByteStride = sizeof(shader_io::InstanceInfo),
-                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
-            },
+                                        .FirstElement        = 0,
+                                        .NumElements         = static_cast<uint32_t>(m_instances.size()),
+                                        .StructureByteStride = sizeof(shader_io::InstanceInfo),
+                                        .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+                                        },
         };
         m_app.CreateShaderResourceView(m_instanceBuffer.GetBuffer(), m_instanceBufferIndex, desc);
     }
-
-    // Global uniforms
-    {
-        for (auto &uniforms: m_globalUniforms) {
-            uniforms.instancesIndex = m_instanceBufferIndex;
-            uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
-            uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
-        }
-    }
-
 
     // Render resources
     {
@@ -115,21 +106,20 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             .MaxLOD         = D3D12_FLOAT32_MAX,
         };
 
-        m_finalTexture = m_app.CreateTexture(
+        m_deferredTexture = m_app.CreateTexture(
             m_width,
             m_height,
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
             D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
             D3D12_HEAP_FLAG_NONE,
             defaultSampler,
             nullptr,
-            "final_texture"
+            "deferred_texture"
         );
-        m_app.CreateRenderTargetView(m_finalTexture.GetResource(), rtvOffset);
-        m_finalTextureRtvOffset = rtvOffset++;
+        m_app.CreateRenderTargetView(m_deferredTexture.GetResource(), rtvOffset);
+        m_deferredTextureRtvOffset = rtvOffset++;
 
-        // Depth texture
         m_depthTexture = m_app.CreateTexture(
             m_width,
             m_height,
@@ -149,11 +139,36 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 CD3DX12_RESOURCE_BARRIER::Transition(m_depthTexture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE);
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        m_composedTexture = m_app.CreateTexture(
+            m_width,
+            m_height,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8_UNORM),
+            D3D12_RESOURCE_FLAG_NONE,
+            D3D12_HEAP_FLAG_NONE,
+            defaultSampler,
+            nullptr,
+            "composed_texture"
+        );
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            auto barrier =
+                CD3DX12_RESOURCE_BARRIER::Transition(m_composedTexture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            commandList->ResourceBarrier(1, &barrier);
+        });
     }
 
-        // std::ranges::for_each(m_globaluniforms, [](shader_io::globaluniforms &uniforms) {
-        //     uniforms.color = directx::xmfloat4(1.0f, 1.0f, 1.0f, 1.0f);
-        // });
+    // Uniforms
+    {
+        for (auto &uniforms: m_globalUniforms) {
+            uniforms.instancesIndex = m_instanceBufferIndex;
+            uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
+            uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
+        }
+
+        m_blitUniforms.srcIndex = m_deferredTexture.GetBindlessIndex();
+        m_blitUniforms.dstIndex = m_composedTexture.GetBindlessIndex();
+    }
 }
 
 void Renderer::Render() {
@@ -170,11 +185,14 @@ void Renderer::Render() {
         commandList->RSSetViewports(1, &m_viewport);
         commandList->RSSetScissorRects(1, &m_rect);
 
-        auto barrier =
-            CD3DX12_RESOURCE_BARRIER::Transition(m_finalTexture.GetResource(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_deferredTexture.GetResource(),
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
         commandList->ResourceBarrier(1, &barrier);
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_finalTextureRtvOffset);
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_deferredTextureRtvOffset);
         CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
         commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
         static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 1.0f};
@@ -197,13 +215,43 @@ void Renderer::Render() {
         }
     }
 
+    // Blit pass
+    {
+        commandList->SetComputeRootSignature(m_blit.GetRootSignature());
+        commandList->SetPipelineState(m_blit.GetPipelineState());
+        commandList->SetComputeRoot32BitConstants(0, sizeof(shader_io::BlitUniforms) / sizeof(uint32_t), &m_blitUniforms, 0);
+
+        const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_deferredTexture.GetResource(),
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            ),
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_composedTexture.GetResource(),
+                D3D12_RESOURCE_STATE_COPY_SOURCE,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            )
+        };
+        commandList->ResourceBarrier(barriers.size(), barriers.data());
+
+        commandList->Dispatch(
+            static_cast<uint32_t>(std::ceil(m_width / shader_io::kBlitThreadX)),
+            static_cast<uint32_t>(std::ceil(m_height / shader_io::kBlitThreadY)),
+            1
+        );
+    }
+
     // Copy to present
     {
-        auto barrier =
-            CD3DX12_RESOURCE_BARRIER::Transition(m_finalTexture.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_composedTexture.GetResource(),
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_COPY_SOURCE
+        );
         commandList->ResourceBarrier(1, &barrier);
 
-        m_app.CopyToPresentImage(m_finalTexture.GetResource());
+        m_app.CopyToPresentImage(m_composedTexture.GetResource());
     }
 
 
@@ -213,13 +261,10 @@ void Renderer::Render() {
 void Renderer::Update(const FrameInfo &frameInfo) {
     const uint32_t frameIndex = frameInfo.frameIndex;
 
-    // Update global uniforms
-    {
-        const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
-        const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
-        const DirectX::XMMATRIX   view      = DirectX::XMLoadFloat4x4(&viewFloat);
-        const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
-        const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
-        DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
-    }
+    const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
+    const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
+    const DirectX::XMMATRIX   view      = DirectX::XMLoadFloat4x4(&viewFloat);
+    const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
+    const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
+    DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
 }

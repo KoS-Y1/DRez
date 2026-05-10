@@ -13,6 +13,8 @@ add_library(DX
         DX/DXTexture.h
         DX/DXUtils.cpp
         DX/DXUtils.h
+        DX/DXComputePipeline.cpp
+        DX/DXComputePipeline.h
 )
 target_include_directories(DX PUBLIC DX)
 target_link_libraries(DX PUBLIC

@@ -1,0 +1,4 @@
+{
+    "shader": "../Assets/Shaders/blit.slang",
+    "name": "blit"
+}

@@ -27,3 +27,12 @@ struct GraphicsPipelineConfig {
 
     explicit GraphicsPipelineConfig(std::string_view inputFile);
 };
+
+struct ComputePipelineConfig {
+    std::string shader;
+    std::string name;
+
+    D3D12_PIPELINE_STATE_FLAGS flags{};
+
+    explicit ComputePipelineConfig(std::string_view inputFile);
+};

@@ -14,6 +14,7 @@
 #include "DXApp.h"
 #include "DXBuffer.h"
 #include "DXGraphicsPipeline.h"
+#include "DXComputePipeline.h"
 #include "DXTexture.h"
 
 #include "global_io.slang"
@@ -45,6 +46,7 @@ private:
 
     // TODO: for testing
     DXGraphicsPipeline m_forward{};
+    DXComputePipeline m_blit{};
 
     void Update(const FrameInfo &frameInfo);
 
@@ -54,13 +56,17 @@ private:
     std::vector<DirectX::XMFLOAT4X4>     m_instanceTransforms{};
 
     std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
+    shader_io::BlitUniforms m_blitUniforms{};
 
     DXBuffer m_instanceBuffer{};
     uint32_t m_instanceBufferIndex{};
 
-    DXTexture m_finalTexture{};
-    int32_t   m_finalTextureRtvOffset{};
+    DXTexture m_composedTexture{};
 
     DXTexture m_depthTexture{};
     int32_t   m_depthTextureDsvOffset{};
+
+    DXTexture m_deferredTexture{};
+    int32_t   m_deferredTextureRtvOffset{};
+
 };

@@ -100,6 +100,14 @@ const std::unordered_map<std::string, D3D_PRIMITIVE_TOPOLOGY> kPrimitiveTopology
     {"D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ", D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ}
 };
 
+const std::unordered_map<std::string, D3D12_PIPELINE_STATE_FLAGS> kPipelineStateFlagsMap{
+    {"D3D12_PIPELINE_STATE_FLAG_NONE",                           D3D12_PIPELINE_STATE_FLAG_NONE                          },
+    {"D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG",                     D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG                    },
+    {"D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS",             D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS            },
+    {"D3D12_PIPELINE_STATE_FLAG_DYNAMIC_INDEX_BUFFER_STRIP_CUT", D3D12_PIPELINE_STATE_FLAG_DYNAMIC_INDEX_BUFFER_STRIP_CUT},
+    {"D3D12_PIPELINE_STATE_FLAG_DISABLE_CACHED_BLOB",            D3D12_PIPELINE_STATE_FLAG_DISABLE_CACHED_BLOB           }
+};
+
 template<typename T>
 T LookupMap(const std::unordered_map<std::string, T> &map, std::string_view key, std::string_view typeName) {
     auto it = map.find(std::string(key));
@@ -210,4 +218,13 @@ GraphicsPipelineConfig::GraphicsPipelineConfig(std::string_view inputFile) {
 
     const JsonFile sampleFile = json.Field("sample");
     sample                    = GetSample(sampleFile);
+}
+
+ComputePipelineConfig::ComputePipelineConfig(std::string_view inputFile) {
+    JsonFile json(inputFile);
+
+    shader = json.Get<std::string>("shader");
+    name   = json.Get<std::string>("name");
+
+    flags = LookupMap(kPipelineStateFlagsMap, json.Get<std::string>("flags", "D3D12_PIPELINE_STATE_FLAG_NONE"), "flags");
 }
