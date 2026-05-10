@@ -7,24 +7,22 @@
 #include <string>
 #include <string_view>
 
-#include <glm/glm.hpp>
-
-struct CameraConfig;
+#include <directxmath.h>
 
 class Camera {
 public:
     static constexpr float kDefaultFov{60.0f};
     static constexpr float kDefaultYaw{-90.0f};
     static constexpr float kDefaultPitch{0.0f};
+    static constexpr float kDefaultRatio{16.0f / 9.0f};
 
-    Camera() = delete;
+    Camera()
+        : Camera("Camera") {}
 
-    Camera(std::string name, float ratio)
+    explicit Camera(std::string name)
         : m_name(std::move(name)) {
-        Reset(ratio);
+        Reset();
     }
-
-    Camera(std::string name, const CameraConfig &config, float ratio);
 
     Camera(const Camera &)            = delete;
     Camera &operator=(const Camera &) = delete;
@@ -32,22 +30,22 @@ public:
     Camera(Camera &&) noexcept            = default;
     Camera &operator=(Camera &&) noexcept = default;
 
-    void Reset(float ratio);
+    void Reset();
 
-    void ProcessMovement(const glm::vec3 &direction);
-    void ProcessRotation(const glm::vec2 &offset);
+    void ProcessMovement(const DirectX::XMFLOAT3 &direction);
+    void ProcessRotation(const DirectX::XMFLOAT2 &offset);
     void ProcessZoom(float offset);
 
     void SetRatio(float ratio);
-    void SetLocation(const glm::vec3 &location);
+    void SetLocation(const DirectX::XMFLOAT3 &location);
     void SetFov(float fov);
     void SetRotation(float yaw, float pitch);
 
-    [[nodiscard]] glm::mat4 GetViewMatrix() const { return m_view; }
+    [[nodiscard]] DirectX::XMFLOAT4X4 GetViewMatrix() const { return m_view; }
 
-    [[nodiscard]] glm::mat4 GetProjectionMatrix() const { return m_projection; }
+    [[nodiscard]] DirectX::XMFLOAT4X4 GetProjectionMatrix() const { return m_projection; }
 
-    [[nodiscard]] glm::vec3 GetLocation() const { return m_eye; }
+    [[nodiscard]] DirectX::XMFLOAT3 GetLocation() const { return m_eye; }
 
     [[nodiscard]] float GetYaw() const { return m_yaw; }
 
@@ -62,27 +60,27 @@ private:
     std::string m_name{};
 
     struct CameraFrame {
-        glm::vec3 forward;
-        glm::vec3 up;
-        glm::vec3 right;
+        DirectX::XMVECTOR forward;
+        DirectX::XMVECTOR up;
+        DirectX::XMVECTOR right;
     };
 
-    glm::mat4 m_view;
-    glm::mat4 m_projection;
+    DirectX::XMFLOAT4X4 m_view{};
+    DirectX::XMFLOAT4X4 m_projection{};
 
-    glm::vec3 m_eye;
+    DirectX::XMFLOAT3 m_eye{};
 
-    float m_yaw;
-    float m_pitch;
+    float m_yaw{};
+    float m_pitch{};
 
-    float m_fov;
-    float m_ratio;
+    float m_fov{};
+    float m_ratio{};
 
-    float m_sensitivity;
-    float m_speed;
+    float m_sensitivity{};
+    float m_speed{};
 
     void UpdateViewMatrix();
     void UpdateProjectionMatrix();
 
-    CameraFrame CalculateCameraFrame() const;
+    [[nodiscard]] CameraFrame CalculateCameraFrame() const;
 };

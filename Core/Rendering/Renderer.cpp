@@ -13,8 +13,9 @@
 #include "Mesh.h"
 #include "ResourceManager.h"
 
-Renderer::Renderer(DXApp &app)
+Renderer::Renderer(DXApp &app, const Camera &camera)
     : m_app(app)
+    , m_camera(camera)
     , m_width(app.GetWindowWidth())
     , m_height(app.GetWindowHeight())
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height)})
@@ -214,8 +215,11 @@ void Renderer::Update(const FrameInfo &frameInfo) {
 
     // Update global uniforms
     {
-        // TODO: load with actual camera
-        DirectX::FXMMATRIX viewProj = DirectX::XMMatrixMultiply(DirectX::XMMatrixIdentity(), DirectX::XMMatrixIdentity());
+        const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
+        const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
+        const DirectX::XMMATRIX   view      = DirectX::XMLoadFloat4x4(&viewFloat);
+        const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
+        const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
         DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
     }
 }

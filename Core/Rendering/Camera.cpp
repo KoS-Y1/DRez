@@ -4,16 +4,12 @@
 
 #include "Camera.h"
 
-#include "SceneUtils.h"
-
 #include <algorithm>
-#include <glm/detail/type_quat.hpp>
-#include <glm/ext/quaternion_trigonometric.hpp>
-#include <glm/gtc/quaternion.hpp>
+#include <cmath>
+
+using namespace DirectX;
 
 namespace {
-constexpr glm::vec3 kWorldUp{0.0f, 1.0f, 0.0f};
-
 constexpr float kNear{0.01f};
 constexpr float kFar{10000.0f};
 
@@ -25,31 +21,17 @@ constexpr float kMinFov{0.01f};
 constexpr float kSensitivity{0.1f};
 constexpr float kSpeed{0.01f};
 
+constexpr XMFLOAT3 kWorldUpFloat{0.0f, 1.0f, 0.0f};
 } // namespace
 
-Camera::Camera(std::string name, const CameraConfig &config, float ratio)
-    : m_name(std::move(name))
-    , m_eye(config.position)
-    , m_yaw(config.yaw)
-    , m_pitch(config.pitch)
-    , m_fov(config.fov) {
-    m_ratio = ratio;
-
-    m_speed       = kSpeed;
-    m_sensitivity = kSensitivity;
-
-    UpdateViewMatrix();
-    UpdateProjectionMatrix();
-}
-
-void Camera::Reset(float ratio) {
-    m_eye = glm::vec3(0.0f, 0.0f, 0.0f);
+void Camera::Reset() {
+    m_eye = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
     m_yaw   = kDefaultYaw;
     m_pitch = kDefaultPitch;
 
     m_fov   = kDefaultFov;
-    m_ratio = ratio;
+    m_ratio = kDefaultRatio;
 
     m_speed       = kSpeed;
     m_sensitivity = kSensitivity;
@@ -58,55 +40,56 @@ void Camera::Reset(float ratio) {
     UpdateProjectionMatrix();
 }
 
-void Camera::ProcessMovement(const glm::vec3 &direction) {
+void Camera::ProcessMovement(const XMFLOAT3 &direction) {
     // TODO: right now only handles keyboard input with one certain direction.
     // Controller stick can have linear input between two directions
 
-    const CameraFrame frame = CalculateCameraFrame();
+    const CameraFrame frame   = CalculateCameraFrame();
+    const XMVECTOR    worldUp = XMLoadFloat3(&kWorldUpFloat);
 
-    if (direction == glm::vec3(0.0f, 0.0f, -1.0f)) {
-        m_eye += frame.forward * m_speed;
+    XMVECTOR eye = XMLoadFloat3(&m_eye);
+
+    if (direction.z == -1.0f) {
+        eye = XMVectorAdd(eye, XMVectorScale(frame.forward, m_speed));
     }
 
-    if (direction == glm::vec3(0.0f, 0.0f, 1.0f)) {
-        m_eye -= frame.forward * m_speed;
+    if (direction.z == 1.0f) {
+        eye = XMVectorSubtract(eye, XMVectorScale(frame.forward, m_speed));
     }
 
-    if (direction == glm::vec3(1.0f, 0.0f, 0.0f)) {
-        m_eye += frame.right * m_speed;
+    if (direction.x == 1.0f) {
+        eye = XMVectorAdd(eye, XMVectorScale(frame.right, m_speed));
     }
 
-    if (direction == glm::vec3(-1.0f, 0.0f, 0.0f)) {
-        m_eye -= frame.right * m_speed;
+    if (direction.x == -1.0f) {
+        eye = XMVectorSubtract(eye, XMVectorScale(frame.right, m_speed));
     }
 
-    if (direction == glm::vec3(0.0f, 1.0f, 0.0f)) {
-        m_eye += kWorldUp * m_speed;
+    if (direction.y == 1.0f) {
+        eye = XMVectorAdd(eye, XMVectorScale(worldUp, m_speed));
     }
 
-    if (direction == glm::vec3(0.0f, -1.0f, 0.0f)) {
-        m_eye -= kWorldUp * m_speed;
+    if (direction.y == -1.0f) {
+        eye = XMVectorSubtract(eye, XMVectorScale(worldUp, m_speed));
     }
 
+    XMStoreFloat3(&m_eye, eye);
     UpdateViewMatrix();
 }
 
-void Camera::ProcessRotation(const glm::vec2 &offset) {
+void Camera::ProcessRotation(const XMFLOAT2 &offset) {
     m_yaw   += offset.x * m_sensitivity;
     m_pitch -= offset.y * m_sensitivity;
 
     m_pitch = std::clamp(m_pitch, -kPitchBound, kPitchBound);
 
-    m_yaw = glm::mod(m_yaw, 360.f);
+    m_yaw = std::fmod(m_yaw, 360.0f);
 
     UpdateViewMatrix();
 }
 
 void Camera::ProcessZoom(float offset) {
-    float fov = m_fov - offset;
-
-    fov   = glm::clamp(fov, kMinFov, kMaxFov);
-    m_fov = fov;
+    m_fov = std::clamp(m_fov - offset, kMinFov, kMaxFov);
 
     UpdateProjectionMatrix();
 }
@@ -116,7 +99,7 @@ void Camera::SetRatio(float ratio) {
     UpdateProjectionMatrix();
 }
 
-void Camera::SetLocation(const glm::vec3 &location) {
+void Camera::SetLocation(const XMFLOAT3 &location) {
     m_eye = location;
     UpdateViewMatrix();
 }
@@ -134,32 +117,31 @@ void Camera::SetRotation(float yaw, float pitch) {
 }
 
 void Camera::UpdateProjectionMatrix() {
-    glm::mat4 projectionMatrix = glm::perspectiveRH_ZO(glm::radians(m_fov), m_ratio, kNear, kFar);
-
-    // Flip the Y axis for Vulkan
-    projectionMatrix[1][1] *= -1;
-
-    m_projection = projectionMatrix;
+    const XMMATRIX projectionMatrix = XMMatrixPerspectiveFovRH(XMConvertToRadians(m_fov), m_ratio, kNear, kFar);
+    XMStoreFloat4x4(&m_projection, projectionMatrix);
 }
 
 void Camera::UpdateViewMatrix() {
-    const CameraFrame frame = CalculateCameraFrame();
-    m_view                  = glm::lookAt(m_eye, m_eye + frame.forward, frame.up);
+    const CameraFrame frame  = CalculateCameraFrame();
+    const XMVECTOR    eye    = XMLoadFloat3(&m_eye);
+    const XMVECTOR    target = XMVectorAdd(eye, frame.forward);
+    const XMMATRIX    view   = XMMatrixLookAtRH(eye, target, frame.up);
+    XMStoreFloat4x4(&m_view, view);
 }
 
 Camera::CameraFrame Camera::CalculateCameraFrame() const {
-    const float yawRadian   = glm::radians(m_yaw);
-    const float pitchRadian = glm::radians(m_pitch);
+    const float yawRadian   = XMConvertToRadians(m_yaw);
+    const float pitchRadian = XMConvertToRadians(m_pitch);
 
-    glm::vec3 forward;
-    forward.x = cos(yawRadian) * cos(pitchRadian);
-    forward.y = sin(pitchRadian);
-    forward.z = sin(yawRadian) * cos(pitchRadian);
-    forward   = glm::normalize(forward);
+    XMFLOAT3 forwardF;
+    forwardF.x = std::cos(yawRadian) * std::cos(pitchRadian);
+    forwardF.y = std::sin(pitchRadian);
+    forwardF.z = std::sin(yawRadian) * std::cos(pitchRadian);
 
-    const glm::vec3 right = glm::normalize(glm::cross(forward, kWorldUp));
-
-    const glm::vec3 up = glm::normalize(glm::cross(right, forward));
+    const XMVECTOR worldUp = XMLoadFloat3(&kWorldUpFloat);
+    const XMVECTOR forward = XMVector3Normalize(XMLoadFloat3(&forwardF));
+    const XMVECTOR right   = XMVector3Normalize(XMVector3Cross(forward, worldUp));
+    const XMVECTOR up      = XMVector3Normalize(XMVector3Cross(right, forward));
 
     return {forward, up, right};
 }

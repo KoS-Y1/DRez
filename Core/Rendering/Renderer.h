@@ -10,6 +10,7 @@
 #include <directx/d3dx12.h>
 #include <directxmath.h>
 
+#include "Camera.h"
 #include "DXApp.h"
 #include "DXBuffer.h"
 #include "DXGraphicsPipeline.h"
@@ -21,7 +22,7 @@
 class Renderer {
 public:
     Renderer() = delete;
-    explicit Renderer(DXApp &app);
+    Renderer(DXApp &app, const Camera &camera);
 
     Renderer(const Renderer &)            = delete;
     Renderer &operator=(const Renderer &) = delete;
@@ -34,9 +35,10 @@ public:
 
 
 private:
-    DXApp   &m_app;
-    uint32_t m_width{};
-    uint32_t m_height{};
+    DXApp        &m_app;
+    const Camera &m_camera;
+    uint32_t      m_width{};
+    uint32_t      m_height{};
 
     CD3DX12_VIEWPORT m_viewport{};
     CD3DX12_RECT     m_rect{};

@@ -6,6 +6,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <unordered_map>
+
+#include "Camera.h"
 #include "DXApp.h"
 #include "Debug.h"
 #include "Renderer.h"
@@ -15,6 +18,13 @@ constexpr int kMaxWindowWidth{1600};
 constexpr int kMaxWindowHeight{900};
 constexpr int kMinWindowWidth{640};
 constexpr int kMinWindowHeight{360};
+
+constexpr DirectX::XMFLOAT3 kForward{0.0f, 0.0f, -1.0f};
+constexpr DirectX::XMFLOAT3 kBackward{0.0f, 0.0f, 1.0f};
+constexpr DirectX::XMFLOAT3 kRight{1.0f, 0.0f, 0.0f};
+constexpr DirectX::XMFLOAT3 kLeft{-1.0f, 0.0f, 0.0f};
+constexpr DirectX::XMFLOAT3 kUp{0.0f, 1.0f, 0.0f};
+constexpr DirectX::XMFLOAT3 kDown{0.0f, -1.0f, 0.0f};
 } // namespace
 
 Window::Window()
@@ -34,9 +44,43 @@ Window::~Window() {
 }
 
 void Window::Run() {
-    m_renderer = std::make_unique<Renderer>(*m_dxApp);
+    Camera camera;
+    m_renderer = std::make_unique<Renderer>(*m_dxApp, camera);
 
     DebugInfo("SDL_Window running");
+
+    auto processInput = [&camera](const SDL_Event &event) {
+        static const std::unordered_map<SDL_Scancode, DirectX::XMFLOAT3> cameraMovement{
+            {SDL_SCANCODE_W, kForward },
+            {SDL_SCANCODE_S, kBackward},
+            {SDL_SCANCODE_D, kRight   },
+            {SDL_SCANCODE_A, kLeft    },
+            {SDL_SCANCODE_Q, kUp      },
+            {SDL_SCANCODE_E, kDown    },
+        };
+
+        // Camera movement
+        if (event.type == SDL_EVENT_KEY_DOWN) {
+            const auto pair = cameraMovement.find(event.key.scancode);
+            if (pair != cameraMovement.end()) {
+                camera.ProcessMovement(pair->second);
+            }
+        }
+
+        // Camera rotation
+        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+            SDL_Keymod mod = SDL_GetModState();
+            if (mod & SDL_KMOD_SHIFT) {
+                DirectX::XMFLOAT2 offset{event.motion.xrel, event.motion.yrel};
+                camera.ProcessRotation(offset);
+            }
+        }
+
+        // Camera zoom
+        if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+            camera.ProcessZoom(event.wheel.y);
+        }
+    };
 
     m_running = true;
     while (m_running) {
@@ -49,10 +93,10 @@ void Window::Run() {
             default:
                 break;
             }
+            processInput(event);
         }
 
         m_renderer->Render();
-
     }
 
     DebugInfo("SDL_Window quitting");
