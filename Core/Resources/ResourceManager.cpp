@@ -104,7 +104,6 @@ void ResourceManager::Init(DXApp &app) {
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        m_meshInfoBufferIndex = app.AllocateBindlessIndex();
         const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
             .Format                  = DXGI_FORMAT_UNKNOWN,
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
@@ -116,7 +115,7 @@ void ResourceManager::Init(DXApp &app) {
                                  .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
             },
         };
-        app.CreateShaderResourceView(m_meshInfoBuffer.GetBuffer(), m_meshInfoBufferIndex, desc);
+        m_meshInfoBufferSrv = app.CreateDXShaderResourceView(m_meshInfoBuffer.GetBuffer(), desc);
     }
 
     // Index views
@@ -149,7 +148,6 @@ void ResourceManager::Init(DXApp &app) {
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        m_materialInfoBufferIndex = app.AllocateBindlessIndex();
         const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
             .Format                  = DXGI_FORMAT_UNKNOWN,
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
@@ -161,7 +159,7 @@ void ResourceManager::Init(DXApp &app) {
                                  .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
             },
         };
-        app.CreateShaderResourceView(m_materialInfoBuffer.GetBuffer(), m_materialInfoBufferIndex, desc);
+        m_materialInfoBufferSrv = app.CreateDXShaderResourceView(m_materialInfoBuffer.GetBuffer(), desc);
     }
 
     // Instance buffer
@@ -214,8 +212,8 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     std::string gltfName = drez::file_system::GetFileNameWithoutExtension(fileName);
 
     // Create buffer to store GLTF data and upload it to GPU
-    const uint32_t gltfBufferIndex = app.AllocateBindlessIndex();
-    DXBuffer       gltfBuffer;
+    DXBuffer             gltfBuffer;
+    DXShaderResourceView gltfBufferSrv;
     {
         uint64_t               bufferSize;
         DXBuffer               stagingBuffer;
@@ -279,11 +277,13 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                                  .Flags               = D3D12_BUFFER_SRV_FLAG_RAW,
             },
         };
-        app.CreateShaderResourceView(gltfBuffer.GetBuffer(), gltfBufferIndex, desc);
+        gltfBufferSrv = app.CreateDXShaderResourceView(gltfBuffer.GetBuffer(), desc);
     }
 
+    const uint32_t                  gltfBufferIndex   = gltfBufferSrv.GetIndex();
     const D3D12_GPU_VIRTUAL_ADDRESS gltfBufferAddress = gltfBuffer.GetGPUVirtualAddress();
     m_gltfBuffers.push_back(std::move(gltfBuffer));
+    m_gltfBufferSrvs.push_back(std::move(gltfBufferSrv));
 
     uint32_t meshHandle{};
     for (size_t meshIndex = 0; meshIndex < asset->meshes.size(); meshIndex++) {
@@ -359,16 +359,15 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     ThreadPool::GetInstance().WaitIdle();
 
     // Load and create textures
-    std::vector<DXTexture> textures(asset->textures.size());
-    std::vector<uint32_t>  textureBindlessIndices(asset->textures.size());
+    std::vector<DXTexture>            textures(asset->textures.size());
+    std::vector<DXShaderResourceView> textureSrvs(asset->textures.size());
+    std::vector<uint32_t>             textureBindlessIndices(asset->textures.size());
     for (size_t i = 0; i < asset->textures.size(); ++i) {
         ThreadPool::GetInstance().Enqueue([&, i]() {
             const fastgltf::Texture &texture = asset->textures[i];
             DebugCheckCritical(texture.imageIndex.has_value(), "{} in {} does not have an image index", texture.name, fileName);
 
             size_t imageIndex = texture.imageIndex.value();
-
-            const uint32_t bindlessIndex = app.AllocateBindlessIndex();
 
             std::scoped_lock<std::mutex> lk{m_textureMutex};
 
@@ -382,7 +381,6 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             auto width  = static_cast<uint32_t>(std::get<0>(images[imageIndex]));
             auto height = static_cast<uint32_t>(std::get<1>(images[imageIndex]));
 
-            m_textureLookup.emplace(key, bindlessIndex);
             textures[i] = app.CreateTexture(
                 width,
                 height,
@@ -401,9 +399,9 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
                 .Texture2D               = {.MipLevels = 1},
             };
-            app.CreateShaderResourceView(textures[i].GetResource(), bindlessIndex, desc);
-
-            textureBindlessIndices[i] = bindlessIndex;
+            textureSrvs[i]            = app.CreateDXShaderResourceView(textures[i].GetResource(), desc);
+            textureBindlessIndices[i] = textureSrvs[i].GetIndex();
+            m_textureLookup.emplace(key, textureBindlessIndices[i]);
 
             DebugInfo("Texture {} is loaded successfully", key);
         });
@@ -411,6 +409,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
     ThreadPool::GetInstance().WaitIdle();
     m_textures.insert(m_textures.end(), std::make_move_iterator(textures.begin()), std::make_move_iterator(textures.end()));
+    m_textureSrvs.insert(m_textureSrvs.end(), std::make_move_iterator(textureSrvs.begin()), std::make_move_iterator(textureSrvs.end()));
 
     // Translate gltf-local texture index to bindless heap index
     const auto toBindlessIndex = [&textureBindlessIndices](int32_t index) -> int32_t {

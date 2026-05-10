@@ -24,8 +24,7 @@ DXTexture::DXTexture(
 )
     : m_name(std::move(name))
     , m_format(format)
-    , m_sampler(std::move(sampler))
-    , m_bindlessIndex(app.AllocateBindlessIndex()) {
+    , m_sampler(std::move(sampler)) {
     bool isDepthStencil = drez::dx_utils::IsDepthStencilFormat(m_format);
 
     {
@@ -91,14 +90,4 @@ DXTexture::DXTexture(
         }
     }
 
-    {
-        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
-            .Format                  = isDepthStencil ? DXGI_FORMAT_R32_FLOAT : m_format,
-            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
-            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            .Texture2D               = {.MipLevels = 1},
-        };
-
-        app.CreateShaderResourceView(m_texture.Get(), m_bindlessIndex, desc);
-    }
 }

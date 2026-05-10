@@ -42,13 +42,10 @@ public:
 
     [[nodiscard]] const D3D12_SAMPLER_DESC &GetSampler() const { return m_sampler; }
 
-    [[nodiscard]] uint32_t GetBindlessIndex() const { return m_bindlessIndex; }
-
 private:
     std::string m_name{};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture{};
     DXGI_FORMAT                            m_format{DXGI_FORMAT_UNKNOWN};
     D3D12_SAMPLER_DESC                     m_sampler{};
-    uint32_t                               m_bindlessIndex{};
 };

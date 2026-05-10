@@ -74,7 +74,6 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        m_instanceBufferIndex = m_app.AllocateBindlessIndex();
         const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
             .Format                  = DXGI_FORMAT_UNKNOWN,
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
@@ -86,7 +85,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                                         .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
                                         },
         };
-        m_app.CreateShaderResourceView(m_instanceBuffer.GetBuffer(), m_instanceBufferIndex, desc);
+        m_instanceBufferSrv = m_app.CreateDXShaderResourceView(m_instanceBuffer.GetBuffer(), desc);
     }
 
     // Render resources
@@ -119,6 +118,13 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         );
         m_app.CreateRenderTargetView(m_deferredTexture.GetResource(), rtvOffset);
         m_deferredTextureRtvOffset = rtvOffset++;
+        const D3D12_SHADER_RESOURCE_VIEW_DESC deferredSrvDesc{
+            .Format                  = m_deferredTexture.GetFormat(),
+            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D               = {.MipLevels = 1},
+        };
+        m_deferredTextureSrv = m_app.CreateDXShaderResourceView(m_deferredTexture.GetResource(), deferredSrvDesc);
 
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -153,13 +159,19 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             m_width,
             m_height,
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8_UNORM),
-            D3D12_RESOURCE_FLAG_NONE,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
             D3D12_HEAP_FLAG_NONE,
             defaultSampler,
             nullptr,
             "composed_texture"
         );
+        const D3D12_UNORDERED_ACCESS_VIEW_DESC composedUavDesc{
+            .Format        = m_composedTexture.GetFormat(),
+            .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+            .Texture2D     = {.MipSlice = 0, .PlaneSlice = 0},
+        };
+        m_composedTextureUav = m_app.CreateDXUnorderedAccessView(m_composedTexture.GetResource(), composedUavDesc);
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             auto barrier =
                 CD3DX12_RESOURCE_BARRIER::Transition(m_composedTexture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -170,13 +182,13 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     // Uniforms
     {
         for (auto &uniforms: m_globalUniforms) {
-            uniforms.instancesIndex = m_instanceBufferIndex;
+            uniforms.instancesIndex = m_instanceBufferSrv.GetIndex();
             uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         }
 
-        m_blitUniforms.srcIndex = m_deferredTexture.GetBindlessIndex();
-        m_blitUniforms.dstIndex = m_composedTexture.GetBindlessIndex();
+        m_blitUniforms.srcIndex = m_deferredTextureSrv.GetIndex();
+        m_blitUniforms.dstIndex = m_composedTextureUav.GetIndex();
     }
 }
 
@@ -239,7 +251,7 @@ void Renderer::Render() {
             CD3DX12_RESOURCE_BARRIER::Transition(
                 m_composedTexture.GetResource(),
                 D3D12_RESOURCE_STATE_COPY_SOURCE,
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
             )
         };
         commandList->ResourceBarrier(barriers.size(), barriers.data());
@@ -255,7 +267,7 @@ void Renderer::Render() {
     {
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_composedTexture.GetResource(),
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             D3D12_RESOURCE_STATE_COPY_SOURCE
         );
         commandList->ResourceBarrier(1, &barrier);

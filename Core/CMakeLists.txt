@@ -11,6 +11,10 @@ add_library(DX
         DX/DXBuffer.h
         DX/DXTexture.cpp
         DX/DXTexture.h
+        DX/DXShaderResourceView.cpp
+        DX/DXShaderResourceView.h
+        DX/DXUnorderedAccessView.cpp
+        DX/DXUnorderedAccessView.h
         DX/DXUtils.cpp
         DX/DXUtils.h
         DX/DXComputePipeline.cpp

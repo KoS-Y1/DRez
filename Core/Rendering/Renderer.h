@@ -15,7 +15,9 @@
 #include "DXBuffer.h"
 #include "DXGraphicsPipeline.h"
 #include "DXComputePipeline.h"
+#include "DXShaderResourceView.h"
 #include "DXTexture.h"
+#include "DXUnorderedAccessView.h"
 
 #include "global_io.slang"
 #include "resources_io.slang"
@@ -58,15 +60,17 @@ private:
     std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
     shader_io::BlitUniforms m_blitUniforms{};
 
-    DXBuffer m_instanceBuffer{};
-    uint32_t m_instanceBufferIndex{};
+    DXBuffer             m_instanceBuffer{};
+    DXShaderResourceView m_instanceBufferSrv{};
 
-    DXTexture m_composedTexture{};
+    DXTexture             m_composedTexture{};
+    DXUnorderedAccessView m_composedTextureUav{};
 
     DXTexture m_depthTexture{};
     int32_t   m_depthTextureDsvOffset{};
 
-    DXTexture m_deferredTexture{};
-    int32_t   m_deferredTextureRtvOffset{};
+    DXTexture            m_deferredTexture{};
+    int32_t              m_deferredTextureRtvOffset{};
+    DXShaderResourceView m_deferredTextureSrv{};
 
 };

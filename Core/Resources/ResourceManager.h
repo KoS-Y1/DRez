@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "DXBUffer.h"
+#include "DXShaderResourceView.h"
 #include "DXTexture.h"
 #include "Mesh.h"
 #include "Singleton.h"
@@ -38,9 +39,9 @@ public:
 
     [[nodiscard]] std::string_view GetMaterialKey(uint32_t handle) const { return m_materialKeys[handle]; }
 
-    [[nodiscard]] uint32_t GetMeshesBindlessIndex() const { return m_meshInfoBufferIndex; }
+    [[nodiscard]] uint32_t GetMeshesBindlessIndex() const { return m_meshInfoBufferSrv.GetIndex(); }
 
-    [[nodiscard]] uint32_t GetMaterialsBindlessIndex() const { return m_materialInfoBufferIndex; }
+    [[nodiscard]] uint32_t GetMaterialsBindlessIndex() const { return m_materialInfoBufferSrv.GetIndex(); }
 
     // [[nodiscard]] const shader_io::SkyboxMaterialInfo &GetSkyboxMaterial() const { return m_skyboxMaterial; }
 
@@ -50,25 +51,27 @@ protected:
 
 private:
     // GLTF data
-    std::vector<DXBuffer> m_gltfBuffers;
+    std::vector<DXBuffer>             m_gltfBuffers;
+    std::vector<DXShaderResourceView> m_gltfBufferSrvs;
 
     // Mesh
     std::unordered_map<Key, uint32_t> m_meshLookup;
     std::vector<Mesh>                 m_meshes;
     std::vector<shader_io::MeshInfo>  m_meshInfos;
     DXBuffer                          m_meshInfoBuffer;
-    uint32_t                          m_meshInfoBufferIndex{};
+    DXShaderResourceView              m_meshInfoBufferSrv;
 
     // Texture
     std::unordered_map<Key, uint32_t> m_textureLookup;
     std::vector<DXTexture>            m_textures;
+    std::vector<DXShaderResourceView> m_textureSrvs;
 
     // Material
     std::unordered_map<Key, uint32_t>    m_materialLookup;
     std::vector<shader_io::MaterialInfo> m_materialInfo;
     std::vector<std::string>             m_materialKeys;
     DXBuffer                             m_materialInfoBuffer;
-    uint32_t                             m_materialInfoBufferIndex{};
+    DXShaderResourceView                 m_materialInfoBufferSrv;
 
     // Instance
     std::unordered_map<Key, uint32_t>    m_instanceLookup;

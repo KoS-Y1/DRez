@@ -16,7 +16,9 @@
 #include "DXBuffer.h"
 #include "DXComputePipeline.h"
 #include "DXGraphicsPipeline.h"
+#include "DXShaderResourceView.h"
 #include "DXTexture.h"
+#include "DXUnorderedAccessView.h"
 
 #include <directx/d3dx12_root_signature.h>
 
@@ -94,16 +96,25 @@ public:
         return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, sampler, data, name};
     }
 
+    [[nodiscard]] DXShaderResourceView CreateDXShaderResourceView(ID3D12Resource *resource, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
+        return DXShaderResourceView{*this, resource, desc};
+    }
+
+    [[nodiscard]] DXUnorderedAccessView CreateDXUnorderedAccessView(ID3D12Resource *resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC &desc) {
+        return DXUnorderedAccessView{*this, resource, desc};
+    }
+
 public:
     // Resource
     void CreateRenderTargetView(ID3D12Resource *resource, int32_t index);
     void CreateDepthStencilView(ID3D12Resource *resource, int32_t index);
     void CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc);
+    void CreateUnorderedAccessView(ID3D12Resource *resource, int32_t index, const D3D12_UNORDERED_ACCESS_VIEW_DESC &desc);
     void CreateSampler(const D3D12_SAMPLER_DESC &desc, int32_t index);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetRenderTargetViewHandle(int32_t index);
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetDepthStencilViewHandle(int32_t index);
-    CD3DX12_CPU_DESCRIPTOR_HANDLE GetShaderResourceViewHandle(int32_t index);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle(int32_t index);
     CD3DX12_CPU_DESCRIPTOR_HANDLE GetSamplerHandle(int32_t index);
 
     uint32_t AllocateBindlessIndex() { return m_nextBindlessIndex.fetch_add(1, std::memory_order_relaxed); }
