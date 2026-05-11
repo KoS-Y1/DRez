@@ -27,10 +27,11 @@ VSOut vertexMain(float3 position : POSITION)
 }
 
 [shader("pixel")]
-float4 fragmentMain(VSOut input) : SV_Target0
+float4 fragmentMain(const VSOut input) : SV_Target0
 {
     const Texture2D<float4> skybox = (DescriptorHandle<Texture2D<float4>>)uint2(pushConstants.skyboxIndex, 0);
 
-    const float2 uv = SampleSphericalMap(normalize(input.worldPos));
+    float2 uv = SampleSphericalMap(normalize(input.worldPos));
+    uv.y = -uv.y;
     return RgbmToLinear(skybox.SampleLevel(gLinear, uv, 0));
 }

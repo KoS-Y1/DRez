@@ -1,0 +1,12 @@
+{
+  "name": "shadow",
+  "shader": "../Assets/Shaders/shadow.slang",
+  "rasterization": {
+    "cullMode": "VK_CULL_MODE_FRONT_BIT"
+  },
+  "depthStencil": {
+    "depthTestEnable": true,
+    "depthWriteEnable": true,
+    "depthCompareOp": "VK_COMPARE_OP_LESS_OR_EQUAL"
+  }
+}
