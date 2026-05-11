@@ -48,6 +48,7 @@ private:
 
     DXGraphicsPipeline m_gbuffer{};
     DXComputePipeline  m_deferred{};
+    DXGraphicsPipeline m_skybox{};
     DXComputePipeline  m_blit{};
 
     void Update(const FrameInfo &frameInfo);
@@ -59,6 +60,7 @@ private:
 
     std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
     shader_io::DeferredUniforms                                      m_deferredUniforms{};
+    shader_io::SkyboxUniforms                                        m_skyboxUniforms{};
     shader_io::BlitUniforms                                          m_blitUniforms{};
 
     DXBuffer             m_instanceBuffer{};
@@ -82,6 +84,7 @@ private:
     DXTexture             m_deferredTexture{};
     DXShaderResourceView  m_deferredTextureSrv{};
     DXUnorderedAccessView m_deferredTextureUav{};
+    int32_t               m_deferredTextureRtvOffset{};
 
     // Deferred bindless info buffer
     DXBuffer             m_deferredInfoBuffer{};

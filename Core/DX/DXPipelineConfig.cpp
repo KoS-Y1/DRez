@@ -84,6 +84,7 @@ const std::unordered_map<std::string, DXGI_FORMAT> kFormatMap{
 
 const std::unordered_map<std::string, D3D12_INPUT_LAYOUT_DESC> kInputLayoutMap{
     {"VertexEmpty", VertexEmpty::GetInputLayout()},
+    {"VertexP",     VertexP::GetInputLayout()    },
     {"VertexPT2D",  VertexPT2D::GetInputLayout() },
 };
 

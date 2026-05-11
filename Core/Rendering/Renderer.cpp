@@ -25,6 +25,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     {
         m_gbuffer  = m_app.CreateGraphicsPipeline("../Assets/Shaders/gbuffer.json");
         m_deferred = m_app.CreateComputePipeline("../Assets/Shaders/deferred.json");
+        m_skybox   = m_app.CreateGraphicsPipeline("../Assets/Shaders/skybox.json");
         m_blit     = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
     }
 
@@ -165,13 +166,13 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        // Deferred composited HDR target (compute write -> blit read)
+        // Deferred composited HDR target (compute write -> skybox render -> blit read)
         m_deferredTexture = m_app.CreateTexture(
             m_width,
             m_height,
             DXGI_FORMAT_R16G16B16A16_FLOAT,
             drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
-            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Linear,
             nullptr,
@@ -190,6 +191,8 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             .Texture2D     = {.MipSlice = 0, .PlaneSlice = 0},
         };
         m_deferredTextureUav = m_app.CreateDXUnorderedAccessView(m_deferredTexture.GetResource(), deferredUavDesc);
+        m_app.CreateRenderTargetView(m_deferredTexture.GetResource(), rtvOffset);
+        m_deferredTextureRtvOffset = rtvOffset++;
 
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -227,8 +230,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
     // Skybox
     {
-        constexpr uint32_t                                kSkyboxVertexCount = 14;
-        constexpr std::array<VertexP, kSkyboxVertexCount> skyboxVertices{
+        const std::vector<VertexP> skyboxVertices{
             VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, 1.0f)},
             VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, 1.0f)},
             VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, -1.0f)},
@@ -249,11 +251,11 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         DXBuffer stagingBuffer =
             m_app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_skybox_vertex");
 
-        D3D12_SUBRESOURCE_DATA data{
-            .pData      = skyboxVertices.data(),
-            .RowPitch   = size,
-            .SlicePitch = size,
-        };
+        D3D12_SUBRESOURCE_DATA data;
+        data.pData      = skyboxVertices.data();
+        data.RowPitch   = size;
+        data.SlicePitch = size;
+
 
         m_app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
             UpdateSubresources<1>(commandList, m_skyboxVertexBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
@@ -267,8 +269,8 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         });
 
         m_skyboxVertexBufferView.BufferLocation = m_skyboxVertexBuffer.GetGPUVirtualAddress();
-        m_skyboxVertexBufferView.StrideInBytes = sizeof(VertexP);
-        m_skyboxVertexBufferView.SizeInBytes = size;
+        m_skyboxVertexBufferView.StrideInBytes  = sizeof(VertexP);
+        m_skyboxVertexBufferView.SizeInBytes    = size;
     }
 
     // Deferred info buffer
@@ -330,6 +332,8 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
         m_deferredUniforms.deferredInfoIndex = m_deferredInfoBufferSrv.GetIndex();
         m_deferredUniforms.dstIndex          = m_deferredTextureUav.GetIndex();
+
+        m_skyboxUniforms.skyboxIndex = ResourceManager::GetInstance().GetSkyboxBindlessIndex();
 
         m_blitUniforms.srcIndex    = m_deferredTextureSrv.GetIndex();
         m_blitUniforms.dstIndex    = m_composedTextureUav.GetIndex();
@@ -427,6 +431,31 @@ void Renderer::Render() {
         );
     }
 
+    // Skybox pass
+    {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_deferredTexture.GetResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+        commandList->ResourceBarrier(1, &barrier);
+
+        commandList->SetGraphicsRootSignature(m_skybox.GetRootSignature());
+        commandList->SetPipelineState(m_skybox.GetPipelineState());
+        commandList->RSSetViewports(1, &m_viewport);
+        commandList->RSSetScissorRects(1, &m_rect);
+
+        const CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_deferredTextureRtvOffset);
+        const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
+        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+
+        commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::SkyboxUniforms) / sizeof(uint32_t), &m_skyboxUniforms, 0);
+
+        commandList->IASetPrimitiveTopology(m_skybox.GetPrimitiveTopology());
+        commandList->IASetVertexBuffers(0, 1, &m_skyboxVertexBufferView);
+        commandList->DrawInstanced(m_skyboxVertexBufferView.SizeInBytes / m_skyboxVertexBufferView.StrideInBytes, 1, 0, 0);
+    }
+
     // Blit pass
     {
         commandList->SetComputeRootSignature(m_blit.GetRootSignature());
@@ -436,7 +465,7 @@ void Renderer::Render() {
         const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
             CD3DX12_RESOURCE_BARRIER::Transition(
                 m_deferredTexture.GetResource(),
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
             ),
             CD3DX12_RESOURCE_BARRIER::Transition(
@@ -479,6 +508,10 @@ void Renderer::Update(const FrameInfo &frameInfo) {
     const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
     const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
     DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
+
+    DirectX::XMMATRIX viewNoTrans = view;
+    viewNoTrans.r[3]              = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+    DirectX::XMStoreFloat4x4(&m_skyboxUniforms.viewProj, DirectX::XMMatrixMultiply(viewNoTrans, proj));
 
     const DirectX::XMFLOAT3 eye  = m_camera.GetLocation();
     m_deferredUniforms.cameraPos = {eye.x, eye.y, eye.z};

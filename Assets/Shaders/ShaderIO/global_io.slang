@@ -48,4 +48,12 @@ SLANG_PUBLIC struct DeferredUniforms
     SLANG_PUBLIC uint32_t dstIndex;
     uint32_t padding[3];
 };
+
+// Skybox pass
+SLANG_PUBLIC struct SkyboxUniforms
+{
+    SLANG_PUBLIC float4x4 viewProj;
+    SLANG_PUBLIC uint32_t skyboxIndex;
+    uint32_t padding[3];
+};
 }
