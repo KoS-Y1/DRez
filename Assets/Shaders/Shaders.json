@@ -1,6 +1,7 @@
 {
     "shaders": [
-        "../Assets/Shaders/forward.slang",
+        "../Assets/Shaders/gbuffer.slang",
+        "../Assets/Shaders/deferred.slang",
         "../Assets/Shaders/blit.slang"
     ]
 }

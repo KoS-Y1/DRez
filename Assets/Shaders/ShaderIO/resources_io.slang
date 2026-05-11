@@ -14,7 +14,7 @@ namespace shader_io
 SLANG_PUBLIC enum class SamplerType : uint32_t
 {
     Nearest = 0,
-    Linear  = 1,
+    Linear = 1,
 };
 
 SLANG_PUBLIC struct BufferView
@@ -62,6 +62,20 @@ SLANG_PUBLIC struct InstanceInfo
 {
     SLANG_PUBLIC uint32_t meshHandle;
     SLANG_PUBLIC uint32_t materialHandle;
+};
+
+SLANG_PUBLIC struct DeferredInfo
+{
+    SLANG_PUBLIC uint32_t gbuffer0Index;
+    SLANG_PUBLIC uint32_t gbuffer1Index;
+    SLANG_PUBLIC uint32_t gbuffer2Index;
+    SLANG_PUBLIC uint32_t gbuffer3Index;
+
+    SLANG_PUBLIC uint32_t irradianceIndex;
+    SLANG_PUBLIC uint32_t specularIndex;
+    SLANG_PUBLIC uint32_t brdfLutIndex;
+
+    SLANG_PUBLIC uint32_t shadowMapIndex;
 };
 
 };
