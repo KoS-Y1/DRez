@@ -58,8 +58,8 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 
     const float3 normal = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.normals, vertexId);
 
-    const float3x3 localToWorld = float3x3(pushConstants.transform);
-    const float3x3 normalMatrix = float3x3(pushConstants.normalMatrix);
+    const float3x3 localToWorld = float3x3(instance.transform);
+    const float3x3 normalMatrix = float3x3(instance.normalMatrix);
 
     float3 T, B;
     const float3 N = normalize(mul(normal, normalMatrix));
@@ -77,7 +77,7 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
     }
 
     output.uv = GetVertexAttribute<float2>(gltfBuffer, mesh.triangleMesh.texCoords, vertexId);
-    output.worldPos = mul(float4(pos, 1.0f), pushConstants.transform).xyz;
+    output.worldPos = mul(float4(pos, 1.0f), instance.transform).xyz;
     output.sv_position = mul(float4(output.worldPos, 1.0f), pushConstants.viewProj);
     output.T = T;
     output.B = B;

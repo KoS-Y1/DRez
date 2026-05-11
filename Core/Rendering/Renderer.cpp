@@ -5,6 +5,7 @@
 #include "Renderer.h"
 
 #include <algorithm>
+#include <ranges>
 
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_resource_helpers.h>
@@ -56,67 +57,6 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         const XMMATRIX lightProj      = XMMatrixOrthographicRH(kShadowOrthoSize, kShadowOrthoSize, kShadowNear, kShadowFar);
         const XMMATRIX lightViewProj  = XMMatrixMultiply(lightView, lightProj);
         XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
-    }
-
-    // Load instances
-    {
-        // TODO: test for now
-        {
-            uint32_t            meshHandle     = ResourceManager::GetInstance().GetMeshHandle("Chessboard");
-            uint32_t            materialHandle = ResourceManager::GetInstance().GetMaterialHandle("Chessboard");
-            DirectX::XMFLOAT4X4 identity =
-                DirectX::XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-
-            m_instances.emplace_back(meshHandle, materialHandle);
-            m_instanceTransforms.push_back(std::move(identity));
-        }
-        {
-            uint32_t            meshHandle     = ResourceManager::GetInstance().GetMeshHandle("King_Shared");
-            uint32_t            materialHandle = ResourceManager::GetInstance().GetMaterialHandle("King_Black");
-            DirectX::XMFLOAT4X4 identity =
-                DirectX::XMFLOAT4X4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-
-            m_instances.emplace_back(meshHandle, materialHandle);
-            m_instanceTransforms.push_back(std::move(identity));
-        }
-    }
-
-    // Instance buffer
-    {
-        const uint64_t size = std::span{m_instances}.size_bytes();
-
-        m_instanceBuffer = app.CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "instance_buffer");
-        DXBuffer stagingBuffer =
-            app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_instances");
-
-        D3D12_SUBRESOURCE_DATA data{};
-        data.pData      = m_instances.data();
-        data.RowPitch   = size;
-        data.SlicePitch = size;
-
-        m_app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
-            UpdateSubresources<1>(commandList, m_instanceBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
-
-            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-                m_instanceBuffer.GetBuffer(),
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-            );
-            commandList->ResourceBarrier(1, &barrier);
-        });
-
-        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
-            .Format                  = DXGI_FORMAT_UNKNOWN,
-            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            .Buffer                  = {
-                                        .FirstElement        = 0,
-                                        .NumElements         = static_cast<uint32_t>(m_instances.size()),
-                                        .StructureByteStride = sizeof(shader_io::InstanceInfo),
-                                        .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
-                                        },
-        };
-        m_instanceBufferSrv = m_app.CreateDXShaderResourceView(m_instanceBuffer.GetBuffer(), desc);
     }
 
     // Rendering resource
@@ -392,11 +332,11 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
     // Uniforms
     {
-        for (auto &uniforms: m_globalUniforms) {
-            uniforms.instancesIndex = m_instanceBufferSrv.GetIndex();
+        std::ranges::for_each(m_globalUniforms, [](shader_io::GlobalUniforms &uniforms) {
+            uniforms.instancesIndex = ResourceManager::GetInstance().GetInstancesBindlessIndex();
             uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
-        }
+        });
 
         m_deferredUniforms.lightSpaceMatrix  = m_lightSpaceMatrix;
         m_deferredUniforms.deferredInfoIndex = m_deferredInfoBufferSrv.GetIndex();
@@ -440,19 +380,17 @@ void Renderer::Render() {
 
         commandList->IASetPrimitiveTopology(m_shadow.GetPrimitiveTopology());
 
-        for (uint32_t i = 0; i < m_instances.size(); ++i) {
-            // Reuse GlobalUniforms; viewProj is repurposed as the light-space matrix here
-            shader_io::GlobalUniforms shadowUniforms = m_globalUniforms[frameIndex];
-            shadowUniforms.transform                 = m_instanceTransforms[i];
-            shadowUniforms.viewProj                  = m_lightSpaceMatrix;
-            commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &shadowUniforms, 0);
+        // Reuse GlobalUniforms; viewProj is repurposed as the light-space matrix here
+        shader_io::GlobalUniforms shadowUniforms = m_globalUniforms[frameIndex];
+        shadowUniforms.viewProj                  = m_lightSpaceMatrix;
+        commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &shadowUniforms, 0);
 
-            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(m_instances[i].meshHandle);
+        std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
+            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
-
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
-        }
+        });
 
         auto readBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_shadowMapTexture.GetResource(),
@@ -498,18 +436,14 @@ void Renderer::Render() {
 
         commandList->IASetPrimitiveTopology(m_gbuffer.GetPrimitiveTopology());
 
-        for (uint32_t i = 0; i < m_instances.size(); ++i) {
-            m_globalUniforms[frameIndex].transform    = m_instanceTransforms[i];
-            // TODO: inverse transpose to get the actual uniforms
-            m_globalUniforms[frameIndex].normalMatrix = m_instanceTransforms[i];
-            commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &m_globalUniforms[frameIndex], 0);
+        commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &m_globalUniforms[frameIndex], 0);
 
-            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(m_instances[i].meshHandle);
+        std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
+            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
-
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
-        }
+        });
     }
 
     // Deferred pass

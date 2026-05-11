@@ -33,7 +33,7 @@ std::optional<fastgltf::Asset> LoadGltf(std::string_view path) {
     return std::move(asset.get());
 }
 
-std::optional<shader_io::MeshInfo> LoadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh, uint32_t gltfBufferIndex) {
+std::vector<LoadedPrimitive> LoadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh, uint32_t gltfBufferIndex) {
     // Lambda for element byte size calculation
     auto getElementByteSize = [](fastgltf::ComponentType type) -> uint32_t {
         return type == fastgltf::ComponentType::UnsignedShort ? 2U :
@@ -73,41 +73,48 @@ std::optional<shader_io::MeshInfo> LoadMesh(const fastgltf::Asset &asset, const 
             };
         };
 
+    std::vector<LoadedPrimitive> result;
+
     if (mesh.primitives.empty()) {
         DebugError("{} has no primitives", mesh.name);
-        return std::nullopt;
+        return result;
     }
 
-    const fastgltf::Primitive &primitive = mesh.primitives.front();
+    result.reserve(mesh.primitives.size());
 
-    if (!primitive.indicesAccessor.has_value()) {
-        DebugWarning("Primitive indices accessor not found");
-        return std::nullopt;
-    }
-    const fastgltf::Accessor &accessor = asset.accessors[primitive.indicesAccessor.value()];
-    if (!accessor.bufferViewIndex.has_value()) {
-        DebugWarning("Accessor buffer view index not found");
-        return std::nullopt;
-    }
-    const fastgltf::BufferView &bufferView = asset.bufferViews[accessor.bufferViewIndex.value()];
+    std::ranges::for_each(mesh.primitives, [&](const fastgltf::Primitive &primitive) {
+        if (!primitive.indicesAccessor.has_value()) {
+            DebugWarning("Primitive indices accessor not found");
+            return;
+        }
+        const fastgltf::Accessor &accessor = asset.accessors[primitive.indicesAccessor.value()];
+        if (!accessor.bufferViewIndex.has_value()) {
+            DebugWarning("Accessor buffer view index not found");
+            return;
+        }
+        const fastgltf::BufferView &bufferView = asset.bufferViews[accessor.bufferViewIndex.value()];
 
-    shader_io::MeshInfo meshInfo{
-        .gltfBufferIndex = gltfBufferIndex,
-        .indexType       = accessor.componentType == fastgltf::ComponentType::UnsignedShort ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT,
-    };
-    meshInfo.triangleMesh.indices = {
-        .offset = static_cast<uint32_t>(bufferView.byteOffset + accessor.byteOffset),
-        .count  = static_cast<uint32_t>(accessor.count),
-        .byteStride =
-            static_cast<uint32_t>(bufferView.byteStride.has_value() ? bufferView.byteStride.value() : getElementByteSize(accessor.componentType))
-    };
+        shader_io::MeshInfo meshInfo{
+            .gltfBufferIndex = gltfBufferIndex,
+            .indexType       = accessor.componentType == fastgltf::ComponentType::UnsignedShort ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT,
+        };
+        meshInfo.triangleMesh.indices = {
+            .offset = static_cast<uint32_t>(bufferView.byteOffset + accessor.byteOffset),
+            .count  = static_cast<uint32_t>(accessor.count),
+            .byteStride =
+                static_cast<uint32_t>(bufferView.byteStride.has_value() ? bufferView.byteStride.value() : getElementByteSize(accessor.componentType))
+        };
 
-    extractAttribute("POSITION", primitive, meshInfo.triangleMesh.positions);
-    extractAttribute("NORMAL", primitive, meshInfo.triangleMesh.normals);
-    extractAttribute("TEXCOORD_0", primitive, meshInfo.triangleMesh.texCoords);
-    extractAttribute("TANGENT", primitive, meshInfo.triangleMesh.tangents);
+        extractAttribute("POSITION", primitive, meshInfo.triangleMesh.positions);
+        extractAttribute("NORMAL", primitive, meshInfo.triangleMesh.normals);
+        extractAttribute("TEXCOORD_0", primitive, meshInfo.triangleMesh.texCoords);
+        extractAttribute("TANGENT", primitive, meshInfo.triangleMesh.tangents);
 
-    return meshInfo;
+        const int materialIndex = primitive.materialIndex.has_value() ? static_cast<int>(primitive.materialIndex.value()) : -1;
+        result.push_back(LoadedPrimitive{.meshInfo = meshInfo, .materialIndex = materialIndex});
+    });
+
+    return result;
 }
 
 std::optional<std::tuple<int, int, unsigned char *>> LoadImage(std::string_view path, const fastgltf::Asset &asset, const fastgltf::Image &image) {

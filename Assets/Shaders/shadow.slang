@@ -29,7 +29,7 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
     const float3 pos = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.positions, vertexId);
 
     // viewProj is repurposed as the light-space matrix for this pass
-    const float4 worldPos = mul(float4(pos, 1.0f), pushConstants.transform);
+    const float4 worldPos = mul(float4(pos, 1.0f), instance.transform);
     output.sv_position = mul(worldPos, pushConstants.viewProj);
 
     return output;
