@@ -143,7 +143,8 @@ private:
 
 private:
     // Resources
-    static constexpr uint32_t kRenderTargetCount = 1;
+    static constexpr uint32_t kMaxRenderTargets = 16;
+    static constexpr uint32_t kMaxDepthStencils = 1;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain3>                                m_swapchain{};
     uint32_t                                                               m_backBufferIndex{};

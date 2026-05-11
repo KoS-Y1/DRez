@@ -25,46 +25,53 @@ void ResourceManager::Init(DXApp &app) {
         }
     }
 
-    // Load and create skybox textures and material
-    // {
-    //     std::vector<Key> keys = drez::file_system::GetFilesWithExtension("../Assets/Models/Skybox", ".png");
-    //     m_textures.reserve(m_textures.size() + keys.size());
-    //     m_textureLookup.reserve(m_textures.size());
-    //     for (const auto &key: keys) {
-    //         const uint32_t handle = static_cast<uint32_t>(m_textures.size());
-    //
-    //         const std::optional<std::tuple<int, int, unsigned char *>> imageData = drez::file_system::LoadImage(key);
-    //
-    //         DebugCheckCritical(imageData.has_value(), "Failed to load skybox image {}", key);
-    //
-    //         auto width  = static_cast<uint32_t>(std::get<0>(imageData.value()));
-    //         auto height = static_cast<uint32_t>(std::get<1>(imageData.value()));
-    //
-    //         m_textures.emplace_back(
-    //             app,
-    //             width,
-    //             height,
-    //             VK_FORMAT_R8G8B8A8_UNORM,
-    //             sizeof(unsigned char) * 4,
-    //             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-    //             VK_IMAGE_ASPECT_COLOR_BIT,
-    //             std::get<2>(imageData.value()),
-    //             defaultSampler,
-    //             key
-    //         );
-    //         m_textureLookup.emplace(key, handle);
-    //
-    //         if (key.find("brdf_lut") != std::string::npos) {
-    //             m_skyboxMaterial.brdfLut = static_cast<int32_t>(handle);
-    //         } else if (key.find("irradiance") != std::string::npos) {
-    //             m_skyboxMaterial.irradianceTexture = static_cast<int32_t>(handle);
-    //         } else if (key.find("specular") != std::string::npos) {
-    //             m_skyboxMaterial.specularTexture = static_cast<int32_t>(handle);
-    //         } else {
-    //             m_skyboxMaterial.skyboxTexture = static_cast<int32_t>(handle);
-    //         }
-    //     }
-    // }
+    // Load and create skybox / IBL textures
+    {
+        const std::vector<Key> keys = drez::file_system::GetFilesWithExtension("../Assets/Models/Skybox", ".png");
+
+        for (const auto &key: keys) {
+            const std::optional<std::tuple<int, int, unsigned char *>> imageData = drez::file_system::LoadImage(key);
+
+            DebugCheckCritical(imageData.has_value(), "Failed to load skybox image {}", key);
+
+            const auto width  = static_cast<uint32_t>(std::get<0>(imageData.value()));
+            const auto height = static_cast<uint32_t>(std::get<1>(imageData.value()));
+
+            DXTexture texture = app.CreateTexture(
+                width,
+                height,
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
+                D3D12_RESOURCE_FLAG_NONE,
+                D3D12_HEAP_FLAG_NONE,
+                shader_io::SamplerType::Nearest,
+                std::get<2>(imageData.value()),
+                key
+            );
+
+            const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+                .Format                  = texture.GetFormat(),
+                .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Texture2D               = {.MipLevels = 1},
+            };
+            DXShaderResourceView srv = app.CreateDXShaderResourceView(texture.GetResource(), desc);
+
+            if (key.find("brdf_lut") != std::string::npos) {
+                m_brdfLutTexture = std::move(texture);
+                m_brdfLutSrv     = std::move(srv);
+            } else if (key.find("irradiance") != std::string::npos) {
+                m_irradianceTexture = std::move(texture);
+                m_irradianceSrv     = std::move(srv);
+            } else if (key.find("specular") != std::string::npos) {
+                m_specularTexture = std::move(texture);
+                m_specularSrv     = std::move(srv);
+            } else {
+                m_skyboxTexture = std::move(texture);
+                m_skyboxSrv     = std::move(srv);
+            }
+        }
+    }
 
 
     // Mesh buffer

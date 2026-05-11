@@ -46,9 +46,9 @@ private:
     CD3DX12_VIEWPORT m_viewport{};
     CD3DX12_RECT     m_rect{};
 
-    // TODO: for testing
-    DXGraphicsPipeline m_forward{};
-    DXComputePipeline m_blit{};
+    DXGraphicsPipeline m_gbuffer{};
+    DXComputePipeline  m_deferred{};
+    DXComputePipeline  m_blit{};
 
     void Update(const FrameInfo &frameInfo);
 
@@ -58,7 +58,8 @@ private:
     std::vector<DirectX::XMFLOAT4X4>     m_instanceTransforms{};
 
     std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
-    shader_io::BlitUniforms m_blitUniforms{};
+    shader_io::DeferredUniforms                                      m_deferredUniforms{};
+    shader_io::BlitUniforms                                          m_blitUniforms{};
 
     DXBuffer             m_instanceBuffer{};
     DXShaderResourceView m_instanceBufferSrv{};
@@ -69,8 +70,17 @@ private:
     DXTexture m_depthTexture{};
     int32_t   m_depthTextureDsvOffset{};
 
-    DXTexture            m_deferredTexture{};
-    int32_t              m_deferredTextureRtvOffset{};
-    DXShaderResourceView m_deferredTextureSrv{};
+    // Gbuffer attachments
+    std::vector<DXTexture>            m_gbufferTextures{};
+    std::vector<int32_t>              m_gbufferRtvOffsets{};
+    std::vector<DXShaderResourceView> m_gbufferSrvs{};
 
+    // Deferred composited (HDR) target
+    DXTexture             m_deferredTexture{};
+    DXShaderResourceView  m_deferredTextureSrv{};
+    DXUnorderedAccessView m_deferredTextureUav{};
+
+    // Deferred bindless info buffer
+    DXBuffer             m_deferredInfoBuffer{};
+    DXShaderResourceView m_deferredInfoBufferSrv{};
 };

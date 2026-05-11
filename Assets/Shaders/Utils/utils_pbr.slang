@@ -77,7 +77,8 @@ public float2 SampleSphericalMap(float3 input)
     return uv + 0.5;
 }
 
-internal float3 SampleIBLReflection(const float3 R, const float roughness, const Sampler2D<float4> specularTex)
+internal float3 SampleIBLReflection(const float3 R, const float roughness,
+                                    const Texture2D<float4> specularTex, const SamplerState samp)
 {
     // based on https://github.com/oframe/ibl-converter/blob/master/src/shaders/PBRShader.js
     const float MAX_REFLECTION_LOD = 6.0;
@@ -98,23 +99,24 @@ internal float3 SampleIBLReflection(const float3 R, const float roughness, const
     uv1 /= pow(2.0, level1);
     uv1.y += 1.0 - exp(-LN2 * level1);
 
-    float3 specular0 = RgbmToLinear(specularTex.SampleLevel(uv0, 0)).rgb;
-    float3 specular1 = RgbmToLinear(specularTex.SampleLevel(uv1, 0)).rgb;
+    float3 specular0 = RgbmToLinear(specularTex.SampleLevel(samp, uv0, 0)).rgb;
+    float3 specular1 = RgbmToLinear(specularTex.SampleLevel(samp, uv1, 0)).rgb;
     float3 reflection = lerp(specular0, specular1, blend);
 
     return reflection;
 }
 
 public float3 CalculateIBL(const float3 N, const float NdotV, const float3 R, const float3 F0, const float3 albedo,
-                  const float roughness, const float metallic, const float ao, const Sampler2D<float4> irradianceTex,
-                  const Sampler2D<float4> specularTex, const Sampler2D<float4> brdfLutTex)
+                  const float roughness, const float metallic, const float ao,
+                  const Texture2D<float4> irradianceTex, const Texture2D<float4> specularTex,
+                  const Texture2D<float4> brdfLutTex, const SamplerState samp)
 {
     const float3 kS = FresnelSchlickRoughness(NdotV, F0, roughness);
     const float3 kD = (float3(1.0f) - kS) * (1.0f - metallic);
 
-    const float3 irradiance = irradianceTex.SampleLevel(SampleSphericalMap(N), 0).xyz;
-    const float3 reflection = SampleIBLReflection(R, roughness, specularTex);
-    const float2 brdf = brdfLutTex.SampleLevel(float2(NdotV, roughness), 0).rg;
+    const float3 irradiance = irradianceTex.SampleLevel(samp, SampleSphericalMap(N), 0).xyz;
+    const float3 reflection = SampleIBLReflection(R, roughness, specularTex, samp);
+    const float2 brdf = brdfLutTex.SampleLevel(samp, float2(NdotV, roughness), 0).rg;
     const float3 specular = reflection * (kS * brdf.x + brdf.y);
 
     return (kD * irradiance * albedo + specular) * ao;

@@ -43,7 +43,9 @@ SLANG_PUBLIC static const uint32_t kDeferredThreadY = 8;
 
 SLANG_PUBLIC struct DeferredUniforms
 {
-    SLANG_PUBLIC DeferredInfo deferredInfo;
+    SLANG_PUBLIC float3 cameraPos;
+    SLANG_PUBLIC uint32_t deferredInfoIndex;
     SLANG_PUBLIC uint32_t dstIndex;
-}
+    uint32_t padding[3];
+};
 }

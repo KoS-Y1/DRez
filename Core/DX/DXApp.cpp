@@ -180,7 +180,7 @@ DXApp::DXApp(HWND hwnd) {
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc{
             .Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-            .NumDescriptors = kRenderTargetCount,
+            .NumDescriptors = kMaxRenderTargets,
             .Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
         };
 
@@ -188,8 +188,9 @@ DXApp::DXApp(HWND hwnd) {
         DebugCheckCritical(SUCCEEDED(result), "Failed to create render target view descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
         m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-        result    = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
+        desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        desc.NumDescriptors = kMaxDepthStencils;
+        result              = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
         DebugCheckCritical(SUCCEEDED(result), "Failed to create depth stencil view descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
         m_dsvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 

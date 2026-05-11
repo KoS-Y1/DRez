@@ -43,6 +43,14 @@ public:
 
     [[nodiscard]] uint32_t GetMaterialsBindlessIndex() const { return m_materialInfoBufferSrv.GetIndex(); }
 
+    [[nodiscard]] uint32_t GetSkyboxBindlessIndex() const { return m_skyboxSrv.GetIndex(); }
+
+    [[nodiscard]] uint32_t GetIrradianceBindlessIndex() const { return m_irradianceSrv.GetIndex(); }
+
+    [[nodiscard]] uint32_t GetSpecularBindlessIndex() const { return m_specularSrv.GetIndex(); }
+
+    [[nodiscard]] uint32_t GetBrdfLutBindlessIndex() const { return m_brdfLutSrv.GetIndex(); }
+
     // [[nodiscard]] const shader_io::SkyboxMaterialInfo &GetSkyboxMaterial() const { return m_skyboxMaterial; }
 
 protected:
@@ -77,6 +85,16 @@ private:
     std::unordered_map<Key, uint32_t>    m_instanceLookup;
     std::vector<shader_io::InstanceInfo> m_instanceInfo;
     DXBuffer                             m_instanceInfoBuffer;
+
+    // Skybox / IBL
+    DXTexture            m_skyboxTexture;
+    DXShaderResourceView m_skyboxSrv;
+    DXTexture            m_irradianceTexture;
+    DXShaderResourceView m_irradianceSrv;
+    DXTexture            m_specularTexture;
+    DXShaderResourceView m_specularSrv;
+    DXTexture            m_brdfLutTexture;
+    DXShaderResourceView m_brdfLutSrv;
 
     // shader_io::SkyboxMaterialInfo m_skyboxMaterial;
 

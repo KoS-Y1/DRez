@@ -19,10 +19,10 @@ struct VSOut
 
 struct FSOut
 {
-    float4 worldPosInstanceId;
-    float4 normalRoughness;
-    float4 albedoOcculusion;
-    float4 emissiveMetallic;
+    float4 worldPosInstanceId : SV_Target0;
+    float4 normalRoughness : SV_Target1;
+    float4 albedoOcculusion : SV_Target2;
+    float4 emissiveMetallic : SV_Target3;
 }
 
 internal float3 Sample(const float2 uv, const Texture2D texture, const shader_io::SamplerType sampler)
@@ -95,7 +95,7 @@ FSOut fragmentMain(VSOut input)
     const StructuredBuffer<shader_io::InstanceInfo> instances =
         (DescriptorHandle<StructuredBuffer<shader_io::InstanceInfo>>)uint2(pushConstants.instancesIndex, 0);
     const StructuredBuffer<shader_io::MaterialInfo> materials =
-        (DescriptorHandle<StructuredBuffer<shader_io::MaterialInfo>>)uint2(pushConstants.materialsIndex);
+        (DescriptorHandle<StructuredBuffer<shader_io::MaterialInfo>>)uint2(pushConstants.materialsIndex, 0);
 
     const shader_io::InstanceInfo instance = instances[input.instanceId];
     const shader_io::MaterialInfo material = materials[instance.materialHandle];
@@ -132,7 +132,7 @@ FSOut fragmentMain(VSOut input)
     }
     if (material.emissiveTextureIndex > -1)
     {
-        const Texture2D texture = (DescriptorHandle<Texture2D<float4>>)uint2(material.emissiveTextureIndex);
+        const Texture2D texture = (DescriptorHandle<Texture2D<float4>>)uint2(material.emissiveTextureIndex, 0);
         emissive = Sample(input.uv, texture, material.emissiveSamplerType);
     }
     else
@@ -141,7 +141,7 @@ FSOut fragmentMain(VSOut input)
     }
     if (material.normalTextureIndex > -1)
     {
-        const Texture2D texture = (DescriptorHandle<Texture2D<float4>>)uint2(material.normalTextureIndex);
+        const Texture2D texture = (DescriptorHandle<Texture2D<float4>>)uint2(material.normalTextureIndex, 0);
         normal = Sample(input.uv, texture, material.normalSamplerType);
         normal = normal * 2.0f - 1.0f;
     }

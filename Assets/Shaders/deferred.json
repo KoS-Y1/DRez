@@ -1,22 +1,4 @@
 {
-    "shader": "../Assets/Shaders/gbuffer.slang",
-    "name": "gbuffer",
-    "rasterizer": {
-        "cullMode": "D3D12_CULL_MODE_BACK"
-    },
-    "depthStencil": {
-        "depthEnable": true,
-        "depthWriteMask": "D3D12_DEPTH_WRITE_MASK_ALL",
-        "depthFunc": "D3D12_COMPARISON_FUNC_LESS_EQUAL"
-    },
-    "inputLayout": "VertexEmpty",
-    "topology": "D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE",
-    "rtvFormats": [
-        "DXGI_FORMAT_R16G16B16A16_FLOAT",
-        "DXGI_FORMAT_R16G16B16A16_FLOAT",
-        "DXGI_FORMAT_R16G16B16A16_FLOAT",
-        "DXGI_FORMAT_R16G16B16A16_FLOAT"
-    ],
-    "dsvFormat": "DXGI_FORMAT_D32_FLOAT",
-    "primitiveTopology": "D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST"
+    "shader": "../Assets/Shaders/deferred.slang",
+    "name": "deferred"
 }

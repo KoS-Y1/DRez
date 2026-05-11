@@ -22,9 +22,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     , m_rect(CD3DX12_RECT{0, 0, static_cast<int32_t>(m_width), static_cast<int32_t>(m_height)}) {
     // Load pipelines
     {
-        m_forward = m_app.CreateGraphicsPipeline("../Assets/Shaders/forward.json");
-
-        m_blit = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
+        m_gbuffer  = m_app.CreateGraphicsPipeline("../Assets/Shaders/gbuffer.json");
+        m_deferred = m_app.CreateComputePipeline("../Assets/Shaders/deferred.json");
+        m_blit     = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
     }
 
     // Load instances
@@ -88,41 +88,64 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         m_instanceBufferSrv = m_app.CreateDXShaderResourceView(m_instanceBuffer.GetBuffer(), desc);
     }
 
-    // Render resources
+    // Rendering resource
     {
         int32_t rtvOffset{0};
         int32_t dsvOffset{0};
 
-        m_deferredTexture = m_app.CreateTexture(
-            m_width,
-            m_height,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
-            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
-            D3D12_HEAP_FLAG_NONE,
-            shader_io::SamplerType::Linear,
-            nullptr,
-            "deferred_texture"
-        );
-        m_app.CreateRenderTargetView(m_deferredTexture.GetResource(), rtvOffset);
-        m_deferredTextureRtvOffset = rtvOffset++;
-        const D3D12_SHADER_RESOURCE_VIEW_DESC deferredSrvDesc{
-            .Format                  = m_deferredTexture.GetFormat(),
+        // Gbuffer attachments
+        const std::vector<std::string> gbufferNames{
+            "gbuffer0_texture",
+            "gbuffer1_texture",
+            "gbuffer2_texture",
+            "gbuffer3_texture",
+        };
+        constexpr DXGI_FORMAT kGbufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        const D3D12_SHADER_RESOURCE_VIEW_DESC gbufferSrvDesc{
+            .Format                  = kGbufferFormat,
             .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             .Texture2D               = {.MipLevels = 1},
         };
-        m_deferredTextureSrv = m_app.CreateDXShaderResourceView(m_deferredTexture.GetResource(), deferredSrvDesc);
+
+        m_gbufferTextures.reserve(gbufferNames.size());
+        m_gbufferRtvOffsets.reserve(gbufferNames.size());
+        m_gbufferSrvs.reserve(gbufferNames.size());
+
+        for (const auto &name: gbufferNames) {
+            DXTexture texture = m_app.CreateTexture(
+                m_width,
+                m_height,
+                kGbufferFormat,
+                drez::dx_utils::GetFormatSize(kGbufferFormat),
+                D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+                D3D12_HEAP_FLAG_NONE,
+                shader_io::SamplerType::Nearest,
+                nullptr,
+                name
+            );
+            m_app.CreateRenderTargetView(texture.GetResource(), rtvOffset);
+            DXShaderResourceView srv = m_app.CreateDXShaderResourceView(texture.GetResource(), gbufferSrvDesc);
+
+            m_gbufferTextures.push_back(std::move(texture));
+            m_gbufferRtvOffsets.push_back(rtvOffset++);
+            m_gbufferSrvs.push_back(std::move(srv));
+        }
 
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
-            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-                m_deferredTexture.GetResource(),
-                D3D12_RESOURCE_STATE_COMMON,
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-            );
-            commandList->ResourceBarrier(1, &barrier);
+            std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+            barriers.reserve(m_gbufferTextures.size());
+            for (const auto &texture: m_gbufferTextures) {
+                barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+                    texture.GetResource(),
+                    D3D12_RESOURCE_STATE_COMMON,
+                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+                ));
+            }
+            commandList->ResourceBarrier(barriers.size(), barriers.data());
         });
 
+        // Depth
         m_depthTexture = m_app.CreateTexture(
             m_width,
             m_height,
@@ -143,6 +166,42 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             commandList->ResourceBarrier(1, &barrier);
         });
 
+        // Deferred composited HDR target (compute write -> blit read)
+        m_deferredTexture = m_app.CreateTexture(
+            m_width,
+            m_height,
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+            D3D12_HEAP_FLAG_NONE,
+            shader_io::SamplerType::Linear,
+            nullptr,
+            "deferred_texture"
+        );
+        const D3D12_SHADER_RESOURCE_VIEW_DESC deferredSrvDesc{
+            .Format                  = m_deferredTexture.GetFormat(),
+            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D               = {.MipLevels = 1},
+        };
+        m_deferredTextureSrv = m_app.CreateDXShaderResourceView(m_deferredTexture.GetResource(), deferredSrvDesc);
+        const D3D12_UNORDERED_ACCESS_VIEW_DESC deferredUavDesc{
+            .Format        = m_deferredTexture.GetFormat(),
+            .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+            .Texture2D     = {.MipSlice = 0, .PlaneSlice = 0},
+        };
+        m_deferredTextureUav = m_app.CreateDXUnorderedAccessView(m_deferredTexture.GetResource(), deferredUavDesc);
+
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                m_deferredTexture.GetResource(),
+                D3D12_RESOURCE_STATE_COMMON,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            );
+            commandList->ResourceBarrier(1, &barrier);
+        });
+
+        // Composed (LDR present-ready) target
         m_composedTexture = m_app.CreateTexture(
             m_width,
             m_height,
@@ -167,6 +226,55 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         });
     }
 
+    // Deferred info buffer
+    {
+        shader_io::DeferredInfo info{};
+        info.gbuffer0Index   = m_gbufferSrvs[0].GetIndex();
+        info.gbuffer1Index   = m_gbufferSrvs[1].GetIndex();
+        info.gbuffer2Index   = m_gbufferSrvs[2].GetIndex();
+        info.gbuffer3Index   = m_gbufferSrvs[3].GetIndex();
+        info.irradianceIndex = ResourceManager::GetInstance().GetIrradianceBindlessIndex();
+        info.specularIndex   = ResourceManager::GetInstance().GetSpecularBindlessIndex();
+        info.brdfLutIndex    = ResourceManager::GetInstance().GetBrdfLutBindlessIndex();
+        info.shadowMapIndex  = 0;
+
+        const uint64_t size = sizeof(shader_io::DeferredInfo);
+
+        m_deferredInfoBuffer =
+            m_app.CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "deferred_info_buffer");
+        DXBuffer stagingBuffer =
+            m_app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_deferred_info");
+
+        D3D12_SUBRESOURCE_DATA data{};
+        data.pData      = &info;
+        data.RowPitch   = size;
+        data.SlicePitch = size;
+
+        m_app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
+            UpdateSubresources<1>(commandList, m_deferredInfoBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
+
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                m_deferredInfoBuffer.GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            );
+            commandList->ResourceBarrier(1, &barrier);
+        });
+
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = DXGI_FORMAT_UNKNOWN,
+            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Buffer                  = {
+                                        .FirstElement        = 0,
+                                        .NumElements         = 1,
+                                        .StructureByteStride = sizeof(shader_io::DeferredInfo),
+                                        .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+                                        },
+        };
+        m_deferredInfoBufferSrv = m_app.CreateDXShaderResourceView(m_deferredInfoBuffer.GetBuffer(), desc);
+    }
+
     // Uniforms
     {
         for (auto &uniforms: m_globalUniforms) {
@@ -174,6 +282,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         }
+
+        m_deferredUniforms.deferredInfoIndex = m_deferredInfoBufferSrv.GetIndex();
+        m_deferredUniforms.dstIndex          = m_deferredTextureUav.GetIndex();
 
         m_blitUniforms.srcIndex    = m_deferredTextureSrv.GetIndex();
         m_blitUniforms.dstIndex    = m_composedTextureUav.GetIndex();
@@ -188,28 +299,39 @@ void Renderer::Render() {
 
     Update(frameInfo);
 
-    // Forward pass
+    // Gbuffer pass
     {
-        commandList->SetGraphicsRootSignature(m_forward.GetRootSignature());
-        commandList->SetPipelineState(m_forward.GetPipelineState());
+        commandList->SetGraphicsRootSignature(m_gbuffer.GetRootSignature());
+        commandList->SetPipelineState(m_gbuffer.GetPipelineState());
         commandList->RSSetViewports(1, &m_viewport);
         commandList->RSSetScissorRects(1, &m_rect);
 
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_deferredTexture.GetResource(),
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        commandList->ResourceBarrier(1, &barrier);
+        std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+        barriers.reserve(m_gbufferTextures.size());
+        for (const auto &texture: m_gbufferTextures) {
+            barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+                texture.GetResource(),
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_RENDER_TARGET
+            ));
+        }
+        commandList->ResourceBarrier(barriers.size(), barriers.data());
 
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_deferredTextureRtvOffset);
-        CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
-        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-        static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 1.0f};
-        commandList->ClearRenderTargetView(rtvHandle, rtvClearColor, 0, nullptr);
+        std::vector<CD3DX12_CPU_DESCRIPTOR_HANDLE> rtvHandles;
+        rtvHandles.reserve(m_gbufferRtvOffsets.size());
+        for (const int32_t offset: m_gbufferRtvOffsets) {
+            rtvHandles.push_back(m_app.GetRenderTargetViewHandle(offset));
+        }
+        const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
+        commandList->OMSetRenderTargets(rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
+
+        static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 0.0f};
+        for (const auto &handle: rtvHandles) {
+            commandList->ClearRenderTargetView(handle, rtvClearColor, 0, nullptr);
+        }
         commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-        commandList->IASetPrimitiveTopology(m_forward.GetPrimitiveTopology());
+        commandList->IASetPrimitiveTopology(m_gbuffer.GetPrimitiveTopology());
 
         for (uint32_t i = 0; i < m_instances.size(); ++i) {
             m_globalUniforms[frameIndex].transform    = m_instanceTransforms[i];
@@ -225,6 +347,35 @@ void Renderer::Render() {
         }
     }
 
+    // Deferred pass
+    {
+        std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+        barriers.reserve(m_gbufferTextures.size() + 1);
+        for (const auto &texture: m_gbufferTextures) {
+            barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+                texture.GetResource(),
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            ));
+        }
+        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+            m_deferredTexture.GetResource(),
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+        ));
+        commandList->ResourceBarrier(barriers.size(), barriers.data());
+
+        commandList->SetComputeRootSignature(m_deferred.GetRootSignature());
+        commandList->SetPipelineState(m_deferred.GetPipelineState());
+        commandList->SetComputeRoot32BitConstants(0, sizeof(shader_io::DeferredUniforms) / sizeof(uint32_t), &m_deferredUniforms, 0);
+
+        commandList->Dispatch(
+            static_cast<uint32_t>(std::ceil(m_width / shader_io::kDeferredThreadX)),
+            static_cast<uint32_t>(std::ceil(m_height / shader_io::kDeferredThreadY)),
+            1
+        );
+    }
+
     // Blit pass
     {
         commandList->SetComputeRootSignature(m_blit.GetRootSignature());
@@ -234,7 +385,7 @@ void Renderer::Render() {
         const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
             CD3DX12_RESOURCE_BARRIER::Transition(
                 m_deferredTexture.GetResource(),
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
             ),
             CD3DX12_RESOURCE_BARRIER::Transition(
@@ -277,4 +428,7 @@ void Renderer::Update(const FrameInfo &frameInfo) {
     const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
     const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
     DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
+
+    const DirectX::XMFLOAT3 eye = m_camera.GetLocation();
+    m_deferredUniforms.cameraPos = {eye.x, eye.y, eye.z};
 }
