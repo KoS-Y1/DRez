@@ -26,7 +26,8 @@ public:
         D3D12_HEAP_FLAGS        heapFlags,
         shader_io::SamplerType  samplerType,
         const void             *data,
-        std::string             name
+        std::string             name,
+        DXGI_FORMAT             clearFormat = DXGI_FORMAT_UNKNOWN
     );
 
     DXTexture(const DXTexture &)            = delete;

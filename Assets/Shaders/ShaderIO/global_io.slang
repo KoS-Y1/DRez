@@ -43,10 +43,13 @@ SLANG_PUBLIC static const uint32_t kDeferredThreadY = 8;
 
 SLANG_PUBLIC struct DeferredUniforms
 {
+    SLANG_PUBLIC float4x4 lightSpaceMatrix;
     SLANG_PUBLIC float3 cameraPos;
     SLANG_PUBLIC uint32_t deferredInfoIndex;
+    SLANG_PUBLIC float3 lightDir;
+    SLANG_PUBLIC float lightIntensity;
+    SLANG_PUBLIC float3 lightColor;
     SLANG_PUBLIC uint32_t dstIndex;
-    uint32_t padding[3];
 };
 
 // Skybox pass

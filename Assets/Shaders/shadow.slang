@@ -1,8 +1,7 @@
 import ShaderIO;
 import Utils;
 
-[[vk::push_constant]]
-ConstantBuffer<shader_io::GlobalUniforms> pushConstant;
+ConstantBuffer<shader_io::GlobalUniforms> pushConstants;
 
 struct VSOut
 {
@@ -10,20 +9,28 @@ struct VSOut
 }
 
 [shader("vertex")]
-VSOut vertMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
-               uint baseInstance: SV_StartInstanceLocation)
+VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
+                 uint baseInstance: SV_StartInstanceLocation)
 {
     VSOut output;
 
-    uint instanceId = instanceIndex + baseInstance;
+    const uint instanceId = instanceIndex + baseInstance;
 
-    shader_io::GlobalSceneInfo *sceneInfo = pushConstant.sceneInfo;
-    const shader_io::InstanceInfo instance = sceneInfo->instances[instanceId];
-    const shader_io::MeshInfo mesh = sceneInfo->meshes[instance.meshHandle];
+    const StructuredBuffer<shader_io::InstanceInfo> instances =
+        (DescriptorHandle<StructuredBuffer<shader_io::InstanceInfo>>)uint2(pushConstants.instancesIndex, 0);
+    const StructuredBuffer<shader_io::MeshInfo> meshes =
+        (DescriptorHandle<StructuredBuffer<shader_io::MeshInfo>>)uint2(pushConstants.meshesIndex, 0);
 
-    const float3 pos = GetVertexAttribute<float3>(mesh.buffer, mesh.triangleMesh.positions, vertexId);
+    const shader_io::InstanceInfo instance = instances[instanceId];
+    const shader_io::MeshInfo mesh = meshes[instance.meshHandle];
 
-    output.sv_position = mul(mul(float4(pos, 1.0f), pushConstant.transform), sceneInfo->lightSpace);
+    ByteAddressBuffer gltfBuffer = (DescriptorHandle<ByteAddressBuffer>)uint2(mesh.gltfBufferIndex, 0);
+
+    const float3 pos = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.positions, vertexId);
+
+    // viewProj is repurposed as the light-space matrix for this pass
+    const float4 worldPos = mul(float4(pos, 1.0f), pushConstants.transform);
+    output.sv_position = mul(worldPos, pushConstants.viewProj);
 
     return output;
 }

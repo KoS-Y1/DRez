@@ -190,6 +190,27 @@ DXGI_SAMPLE_DESC GetSample(const JsonFile &file) {
 
 } // namespace
 
+namespace drez::dx::pipeline {
+const std::vector<CD3DX12_STATIC_SAMPLER_DESC> &GetStaticSamplers() {
+    static const std::vector<CD3DX12_STATIC_SAMPLER_DESC> samplers{
+        CD3DX12_STATIC_SAMPLER_DESC{0, D3D12_FILTER_MIN_MAG_MIP_POINT},
+        CD3DX12_STATIC_SAMPLER_DESC{1, D3D12_FILTER_MIN_MAG_MIP_LINEAR},
+        CD3DX12_STATIC_SAMPLER_DESC{
+            2,
+            D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+            D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            0.0f,
+            16,
+            D3D12_COMPARISON_FUNC_LESS_EQUAL,
+            D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+        },
+    };
+    return samplers;
+}
+} // namespace drez::dx::pipeline
+
 GraphicsPipelineConfig::GraphicsPipelineConfig(std::string_view inputFile) {
     JsonFile json(inputFile);
 

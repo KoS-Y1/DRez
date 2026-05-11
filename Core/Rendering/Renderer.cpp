@@ -14,19 +14,48 @@
 #include "ResourceManager.h"
 #include "VertexFormats.h"
 
+namespace {
+// Fixed directional light shared by the shadow and deferred passes
+constexpr DirectX::XMFLOAT3 kLightDir{0.5f, 0.5f, 0.5f};
+constexpr DirectX::XMFLOAT3 kLightColor{1.0f, 1.0f, 0.95f};
+constexpr float             kLightIntensity{3.0f};
+
+// Orthographic frustum the shadow map covers, in world units, centered on origin
+constexpr float kShadowOrthoSize{20.0f};
+constexpr float kShadowNear{0.1f};
+constexpr float kShadowFar{100.0f};
+constexpr float kLightDistance{10.0f};
+} // namespace
+
 Renderer::Renderer(DXApp &app, const Camera &camera)
     : m_app(app)
     , m_camera(camera)
     , m_width(app.GetWindowWidth())
     , m_height(app.GetWindowHeight())
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height)})
-    , m_rect(CD3DX12_RECT{0, 0, static_cast<int32_t>(m_width), static_cast<int32_t>(m_height)}) {
+    , m_rect(CD3DX12_RECT{0, 0, static_cast<int32_t>(m_width), static_cast<int32_t>(m_height)})
+    , m_shadowViewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(kShadowMapSize), static_cast<float>(kShadowMapSize)})
+    , m_shadowRect(CD3DX12_RECT{0, 0, static_cast<int32_t>(kShadowMapSize), static_cast<int32_t>(kShadowMapSize)}) {
     // Load pipelines
     {
+        m_shadow   = m_app.CreateGraphicsPipeline("../Assets/Shaders/shadow.json");
         m_gbuffer  = m_app.CreateGraphicsPipeline("../Assets/Shaders/gbuffer.json");
         m_deferred = m_app.CreateComputePipeline("../Assets/Shaders/deferred.json");
         m_skybox   = m_app.CreateGraphicsPipeline("../Assets/Shaders/skybox.json");
         m_blit     = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
+    }
+
+    // Light-space matrix
+    {
+        using namespace DirectX;
+        const XMVECTOR L              = XMVector3Normalize(XMLoadFloat3(&kLightDir));
+        const XMVECTOR sceneCenter    = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+        const XMVECTOR lightPos       = XMVectorAdd(sceneCenter, XMVectorScale(L, kLightDistance));
+        const XMVECTOR worldUp        = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        const XMMATRIX lightView      = XMMatrixLookAtRH(lightPos, sceneCenter, worldUp);
+        const XMMATRIX lightProj      = XMMatrixOrthographicRH(kShadowOrthoSize, kShadowOrthoSize, kShadowNear, kShadowFar);
+        const XMMATRIX lightViewProj  = XMMatrixMultiply(lightView, lightProj);
+        XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
     }
 
     // Load instances
@@ -166,6 +195,45 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             commandList->ResourceBarrier(1, &barrier);
         });
 
+        // Shadow map (R32_TYPELESS so the resource can alias as DSV/D32_FLOAT and SRV/R32_FLOAT)
+        m_shadowMapTexture = m_app.CreateTexture(
+            kShadowMapSize,
+            kShadowMapSize,
+            DXGI_FORMAT_R32_TYPELESS,
+            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R32_TYPELESS),
+            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
+            D3D12_HEAP_FLAG_NONE,
+            shader_io::SamplerType::Linear,
+            nullptr,
+            "shadow_map_texture",
+            DXGI_FORMAT_D32_FLOAT
+        );
+        const D3D12_DEPTH_STENCIL_VIEW_DESC shadowDsvDesc{
+            .Format        = DXGI_FORMAT_D32_FLOAT,
+            .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+            .Flags         = D3D12_DSV_FLAG_NONE,
+            .Texture2D     = {.MipSlice = 0},
+        };
+        m_app.CreateDepthStencilView(m_shadowMapTexture.GetResource(), dsvOffset, shadowDsvDesc);
+        m_shadowMapDsvOffset = dsvOffset++;
+
+        const D3D12_SHADER_RESOURCE_VIEW_DESC shadowSrvDesc{
+            .Format                  = DXGI_FORMAT_R32_FLOAT,
+            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D               = {.MipLevels = 1},
+        };
+        m_shadowMapSrv = m_app.CreateDXShaderResourceView(m_shadowMapTexture.GetResource(), shadowSrvDesc);
+
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                m_shadowMapTexture.GetResource(),
+                D3D12_RESOURCE_STATE_COMMON,
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            );
+            commandList->ResourceBarrier(1, &barrier);
+        });
+
         // Deferred composited HDR target (compute write -> skybox render -> blit read)
         m_deferredTexture = m_app.CreateTexture(
             m_width,
@@ -283,7 +351,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         info.irradianceIndex = ResourceManager::GetInstance().GetIrradianceBindlessIndex();
         info.specularIndex   = ResourceManager::GetInstance().GetSpecularBindlessIndex();
         info.brdfLutIndex    = ResourceManager::GetInstance().GetBrdfLutBindlessIndex();
-        info.shadowMapIndex  = 0;
+        info.shadowMapIndex  = m_shadowMapSrv.GetIndex();
 
         const uint64_t size = sizeof(shader_io::DeferredInfo);
 
@@ -330,8 +398,12 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         }
 
+        m_deferredUniforms.lightSpaceMatrix  = m_lightSpaceMatrix;
         m_deferredUniforms.deferredInfoIndex = m_deferredInfoBufferSrv.GetIndex();
         m_deferredUniforms.dstIndex          = m_deferredTextureUav.GetIndex();
+        m_deferredUniforms.lightDir          = kLightDir;
+        m_deferredUniforms.lightColor        = kLightColor;
+        m_deferredUniforms.lightIntensity    = kLightIntensity;
 
         m_skyboxUniforms.skyboxIndex = ResourceManager::GetInstance().GetSkyboxBindlessIndex();
 
@@ -347,6 +419,48 @@ void Renderer::Render() {
     uint32_t                   frameIndex  = frameInfo.frameIndex;
 
     Update(frameInfo);
+
+    // Shadow pass
+    {
+        commandList->SetGraphicsRootSignature(m_shadow.GetRootSignature());
+        commandList->SetPipelineState(m_shadow.GetPipelineState());
+        commandList->RSSetViewports(1, &m_shadowViewport);
+        commandList->RSSetScissorRects(1, &m_shadowRect);
+
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_shadowMapTexture.GetResource(),
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE
+        );
+        commandList->ResourceBarrier(1, &barrier);
+
+        const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_shadowMapDsvOffset);
+        commandList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
+        commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+        commandList->IASetPrimitiveTopology(m_shadow.GetPrimitiveTopology());
+
+        for (uint32_t i = 0; i < m_instances.size(); ++i) {
+            // Reuse GlobalUniforms; viewProj is repurposed as the light-space matrix here
+            shader_io::GlobalUniforms shadowUniforms = m_globalUniforms[frameIndex];
+            shadowUniforms.transform                 = m_instanceTransforms[i];
+            shadowUniforms.viewProj                  = m_lightSpaceMatrix;
+            commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &shadowUniforms, 0);
+
+            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(m_instances[i].meshHandle);
+            const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
+            commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
+
+            commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
+        }
+
+        auto readBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_shadowMapTexture.GetResource(),
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        );
+        commandList->ResourceBarrier(1, &readBarrier);
+    }
 
     // Gbuffer pass
     {

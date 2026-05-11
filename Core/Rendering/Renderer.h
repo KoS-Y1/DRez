@@ -46,6 +46,10 @@ private:
     CD3DX12_VIEWPORT m_viewport{};
     CD3DX12_RECT     m_rect{};
 
+    CD3DX12_VIEWPORT m_shadowViewport{};
+    CD3DX12_RECT     m_shadowRect{};
+
+    DXGraphicsPipeline m_shadow{};
     DXGraphicsPipeline m_gbuffer{};
     DXComputePipeline  m_deferred{};
     DXGraphicsPipeline m_skybox{};
@@ -74,6 +78,13 @@ private:
 
     DXTexture m_depthTexture{};
     int32_t   m_depthTextureDsvOffset{};
+
+    // Shadow map
+    static constexpr uint32_t kShadowMapSize = 2048;
+    DXTexture                 m_shadowMapTexture{};
+    DXShaderResourceView      m_shadowMapSrv{};
+    int32_t                   m_shadowMapDsvOffset{};
+    DirectX::XMFLOAT4X4       m_lightSpaceMatrix{};
 
     // Gbuffer attachments
     std::vector<DXTexture>            m_gbufferTextures{};

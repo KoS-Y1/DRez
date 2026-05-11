@@ -20,12 +20,16 @@ DXTexture::DXTexture(
     D3D12_HEAP_FLAGS        heapFlags,
     shader_io::SamplerType  samplerType,
     const void             *data,
-    std::string             name
+    std::string             name,
+    DXGI_FORMAT             clearFormat
 )
     : m_name(std::move(name))
     , m_format(format)
     , m_samplerType(samplerType) {
-    bool isDepthStencil = drez::dx_utils::IsDepthStencilFormat(m_format);
+    // Typeless resource formats (used so a DSV + SRV can alias the same memory) need an
+    // explicit typed clearFormat; for typed formats we just clear with the resource format.
+    const DXGI_FORMAT effectiveClearFormat = (clearFormat == DXGI_FORMAT_UNKNOWN) ? m_format : clearFormat;
+    const bool isDepthStencil = drez::dx_utils::IsDepthStencilFormat(effectiveClearFormat);
 
     {
         D3D12_RESOURCE_DESC desc{
@@ -69,7 +73,7 @@ DXTexture::DXTexture(
                 commandList->ResourceBarrier(1, &barrier);
             });
         } else if (resourceFlags == D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET || resourceFlags == D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-            D3D12_CLEAR_VALUE clearValue{.Format = m_format};
+            D3D12_CLEAR_VALUE clearValue{.Format = effectiveClearFormat};
             if (isDepthStencil) {
                 clearValue.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{.Depth = 1.0f, .Stencil = 0};
             } else {

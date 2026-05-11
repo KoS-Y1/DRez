@@ -5,10 +5,11 @@ ConstantBuffer<shader_io::DeferredUniforms> pushConstants;
 
 SamplerState gNearest : register(s0);
 SamplerState gLinear : register(s1);
+SamplerComparisonState gShadow : register(s2);
 
 [shader("compute")]
 [numthreads(shader_io::kDeferredThreadX, shader_io::kDeferredThreadY, 1)]
-void computeMain(const uint3 threadId: SV_DispatchThreadID)
+void computeMain(uint3 threadId: SV_DispatchThreadID)
 {
     const uint2 px = threadId.xy;
 
@@ -56,12 +57,8 @@ void computeMain(const uint3 threadId: SV_DispatchThreadID)
     const float NdotV = max(dot(N, V), 0.0f);
     const float3 F0 = lerp(float3(0.04f), albedo, metallic);
 
-    // Fixed directional light
-    const float3 L = normalize(float3(0.5f, 0.5f, 0.5f));
-    const float3 lightColor = float3(1.0f, 1.0f, 0.95f);
-    const float lightIntensity = 3.0f;
-
-    const float3 brdf = CalculateBRDF(N, V, L, albedo, roughness, metallic, lightColor, lightIntensity);
+    const float3 L = normalize(pushConstants.lightDir);
+    const float3 brdf = CalculateBRDF(N, V, L, albedo, roughness, metallic, pushConstants.lightColor, pushConstants.lightIntensity);
 
     const Texture2D<float4> irradianceTex = (DescriptorHandle<Texture2D<float4>>)uint2(info.irradianceIndex, 0);
     const Texture2D<float4> specularTex = (DescriptorHandle<Texture2D<float4>>)uint2(info.specularIndex, 0);
@@ -70,7 +67,12 @@ void computeMain(const uint3 threadId: SV_DispatchThreadID)
     const float3 ibl = CalculateIBL(N, NdotV, R, F0, albedo, roughness, metallic, ao,
                                      irradianceTex, specularTex, brdfLutTex, gNearest);
 
-    const float3 color = ibl + emissive + brdf;
+    // Shadow
+    const Texture2D<float> shadowMap = (DescriptorHandle<Texture2D<float>>)uint2(info.shadowMapIndex, 0);
+    const float4 lightSpacePos = mul(float4(worldPos, 1.0f), pushConstants.lightSpaceMatrix);
+    const float shadow = CalculateShadow(lightSpacePos, L, N, shadowMap, gShadow);
+
+    const float3 color = ibl + emissive + brdf * shadow;
 
     dst[px] = float4(color, 1.0f);
 }

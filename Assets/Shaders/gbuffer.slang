@@ -88,7 +88,7 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 }
 
 [shader("pixel")]
-FSOut fragmentMain(const VSOut input)
+FSOut fragmentMain(VSOut input)
 {
     FSOut output;
 

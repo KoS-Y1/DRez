@@ -8,7 +8,7 @@ SamplerState gLinear : register(s1);
 
 [shader("compute")]
 [numthreads(shader_io::kBlitThreadX, shader_io::kBlitThreadY, 1)]
-void compiteMain(const uint3 threadId: SV_DispatchThreadID)
+void compiteMain(uint3 threadId: SV_DispatchThreadID)
 {
 
     const uint2 px = threadId.xy;

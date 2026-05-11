@@ -8,6 +8,13 @@
 #include <vector>
 
 #include <directx/d3d12.h>
+#include <directx/d3dx12.h>
+
+namespace drez::dx::pipeline {
+// Shared static samplers bound at fixed registers for every pipeline:
+//   s0: nearest        s1: linear        s2: shadow comparison
+const std::vector<CD3DX12_STATIC_SAMPLER_DESC> &GetStaticSamplers();
+} // namespace drez::dx::pipeline
 
 struct GraphicsPipelineConfig {
     std::string shader;

@@ -3,6 +3,7 @@
         "../Assets/Shaders/gbuffer.slang",
         "../Assets/Shaders/deferred.slang",
         "../Assets/Shaders/skybox.slang",
-        "../Assets/Shaders/blit.slang"
+        "../Assets/Shaders/blit.slang",
+        "../Assets/Shaders/shadow.slang"
     ]
 }

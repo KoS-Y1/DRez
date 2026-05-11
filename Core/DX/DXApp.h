@@ -91,9 +91,10 @@ public:
         D3D12_HEAP_FLAGS        heapFlags,
         shader_io::SamplerType  samplerType,
         const void             *data,
-        std::string             name
+        std::string             name,
+        DXGI_FORMAT             clearFormat = DXGI_FORMAT_UNKNOWN
     ) {
-        return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, samplerType, data, name};
+        return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, samplerType, data, name, clearFormat};
     }
 
     [[nodiscard]] DXShaderResourceView CreateDXShaderResourceView(ID3D12Resource *resource, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
@@ -108,6 +109,7 @@ public:
     // Resource
     void CreateRenderTargetView(ID3D12Resource *resource, int32_t index);
     void CreateDepthStencilView(ID3D12Resource *resource, int32_t index);
+    void CreateDepthStencilView(ID3D12Resource *resource, int32_t index, const D3D12_DEPTH_STENCIL_VIEW_DESC &desc);
     void CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc);
     void CreateUnorderedAccessView(ID3D12Resource *resource, int32_t index, const D3D12_UNORDERED_ACCESS_VIEW_DESC &desc);
 
@@ -144,7 +146,7 @@ private:
 private:
     // Resources
     static constexpr uint32_t kMaxRenderTargets = 16;
-    static constexpr uint32_t kMaxDepthStencils = 1;
+    static constexpr uint32_t kMaxDepthStencils = 2;
 
     Microsoft::WRL::ComPtr<IDXGISwapChain3>                                m_swapchain{};
     uint32_t                                                               m_backBufferIndex{};
