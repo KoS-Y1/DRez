@@ -2,7 +2,7 @@
     "shader": "../Assets/Shaders/gbuffer.slang",
     "name": "gbuffer",
     "rasterizer": {
-        "cullMode": "D3D12_CULL_MODE_BACK"
+        "cullMode": "D3D12_CULL_MODE_FRONT"
     },
     "depthStencil": {
         "depthEnable": true,

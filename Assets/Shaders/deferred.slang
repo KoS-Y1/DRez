@@ -57,7 +57,7 @@ void computeMain(const uint3 threadId: SV_DispatchThreadID)
     const float3 F0 = lerp(float3(0.04f), albedo, metallic);
 
     // Fixed directional light
-    const float3 L = normalize(float3(0.5f, 1.0f, 0.3f));
+    const float3 L = normalize(float3(0.5f, 0.5f, 0.5f));
     const float3 lightColor = float3(1.0f, 1.0f, 0.95f);
     const float lightIntensity = 3.0f;
 

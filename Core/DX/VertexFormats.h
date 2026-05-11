@@ -12,6 +12,17 @@ struct VertexEmpty {
     static const D3D12_INPUT_LAYOUT_DESC GetInputLayout();
 };
 
+struct VertexP {
+    DirectX::XMFLOAT3 position;
+
+    VertexP() = default;
+
+    explicit VertexP(DirectX::XMFLOAT3 position)
+        : position(position) {}
+
+    static const D3D12_INPUT_LAYOUT_DESC GetInputLayout();
+};
+
 struct VertexPT2D {
     DirectX::XMFLOAT2 position;
     DirectX::XMFLOAT2 uv;

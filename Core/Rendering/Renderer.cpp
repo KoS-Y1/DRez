@@ -12,6 +12,7 @@
 #include "DXUtils.h"
 #include "Mesh.h"
 #include "ResourceManager.h"
+#include "VertexFormats.h"
 
 Renderer::Renderer(DXApp &app, const Camera &camera)
     : m_app(app)
@@ -100,7 +101,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             "gbuffer2_texture",
             "gbuffer3_texture",
         };
-        constexpr DXGI_FORMAT kGbufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        constexpr DXGI_FORMAT                 kGbufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
         const D3D12_SHADER_RESOURCE_VIEW_DESC gbufferSrvDesc{
             .Format                  = kGbufferFormat,
             .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
@@ -136,11 +137,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
             barriers.reserve(m_gbufferTextures.size());
             for (const auto &texture: m_gbufferTextures) {
-                barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-                    texture.GetResource(),
-                    D3D12_RESOURCE_STATE_COMMON,
-                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-                ));
+                barriers.push_back(
+                    CD3DX12_RESOURCE_BARRIER::Transition(texture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE)
+                );
             }
             commandList->ResourceBarrier(barriers.size(), barriers.data());
         });
@@ -226,6 +225,52 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         });
     }
 
+    // Skybox
+    {
+        constexpr uint32_t                                kSkyboxVertexCount = 14;
+        constexpr std::array<VertexP, kSkyboxVertexCount> skyboxVertices{
+            VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f)}
+        };
+        const uint64_t size = std::span<const VertexP>{skyboxVertices}.size_bytes();
+
+        m_skyboxVertexBuffer =
+            m_app.CreateBuffer(D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "skybox_vetex_buffer");
+        DXBuffer stagingBuffer =
+            m_app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, size, "staging_buffer_skybox_vertex");
+
+        D3D12_SUBRESOURCE_DATA data{
+            .pData      = skyboxVertices.data(),
+            .RowPitch   = size,
+            .SlicePitch = size,
+        };
+
+        m_app.ImmediateSubmit([this, &stagingBuffer, &data](ID3D12GraphicsCommandList *commandList) {
+            UpdateSubresources<1>(commandList, m_skyboxVertexBuffer.GetBuffer(), stagingBuffer.GetBuffer(), 0, 0, 1, &data);
+
+            auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+                m_skyboxVertexBuffer.GetBuffer(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+            );
+            commandList->ResourceBarrier(1, &barrier);
+        });
+
+        m_skyboxVertexBufferView.BufferLocation = m_skyboxVertexBuffer.GetGPUVirtualAddress();
+        m_skyboxVertexBufferView.StrideInBytes = sizeof(VertexP);
+        m_skyboxVertexBufferView.SizeInBytes = size;
+    }
+
     // Deferred info buffer
     {
         shader_io::DeferredInfo info{};
@@ -309,11 +354,13 @@ void Renderer::Render() {
         std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
         barriers.reserve(m_gbufferTextures.size());
         for (const auto &texture: m_gbufferTextures) {
-            barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-                texture.GetResource(),
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-                D3D12_RESOURCE_STATE_RENDER_TARGET
-            ));
+            barriers.push_back(
+                CD3DX12_RESOURCE_BARRIER::Transition(
+                    texture.GetResource(),
+                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+                    D3D12_RESOURCE_STATE_RENDER_TARGET
+                )
+            );
         }
         commandList->ResourceBarrier(barriers.size(), barriers.data());
 
@@ -352,17 +399,21 @@ void Renderer::Render() {
         std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
         barriers.reserve(m_gbufferTextures.size() + 1);
         for (const auto &texture: m_gbufferTextures) {
-            barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-                texture.GetResource(),
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-            ));
+            barriers.push_back(
+                CD3DX12_RESOURCE_BARRIER::Transition(
+                    texture.GetResource(),
+                    D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+                )
+            );
         }
-        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-            m_deferredTexture.GetResource(),
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-        ));
+        barriers.push_back(
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_deferredTexture.GetResource(),
+                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+            )
+        );
         commandList->ResourceBarrier(barriers.size(), barriers.data());
 
         commandList->SetComputeRootSignature(m_deferred.GetRootSignature());
@@ -429,6 +480,6 @@ void Renderer::Update(const FrameInfo &frameInfo) {
     const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
     DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
 
-    const DirectX::XMFLOAT3 eye = m_camera.GetLocation();
+    const DirectX::XMFLOAT3 eye  = m_camera.GetLocation();
     m_deferredUniforms.cameraPos = {eye.x, eye.y, eye.z};
 }

@@ -51,8 +51,6 @@ public:
 
     [[nodiscard]] uint32_t GetBrdfLutBindlessIndex() const { return m_brdfLutSrv.GetIndex(); }
 
-    // [[nodiscard]] const shader_io::SkyboxMaterialInfo &GetSkyboxMaterial() const { return m_skyboxMaterial; }
-
 protected:
     ResourceManager()  = default;
     ~ResourceManager() = default;
@@ -95,8 +93,6 @@ private:
     DXShaderResourceView m_specularSrv;
     DXTexture            m_brdfLutTexture;
     DXShaderResourceView m_brdfLutSrv;
-
-    // shader_io::SkyboxMaterialInfo m_skyboxMaterial;
 
     std::mutex m_meshMutex{};
     std::mutex m_textureMutex{};

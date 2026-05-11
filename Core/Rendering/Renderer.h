@@ -13,8 +13,8 @@
 #include "Camera.h"
 #include "DXApp.h"
 #include "DXBuffer.h"
-#include "DXGraphicsPipeline.h"
 #include "DXComputePipeline.h"
+#include "DXGraphicsPipeline.h"
 #include "DXShaderResourceView.h"
 #include "DXTexture.h"
 #include "DXUnorderedAccessView.h"
@@ -63,6 +63,9 @@ private:
 
     DXBuffer             m_instanceBuffer{};
     DXShaderResourceView m_instanceBufferSrv{};
+
+    DXBuffer m_skyboxVertexBuffer{};
+    D3D12_VERTEX_BUFFER_VIEW m_skyboxVertexBufferView{};
 
     DXTexture             m_composedTexture{};
     DXUnorderedAccessView m_composedTextureUav{};
