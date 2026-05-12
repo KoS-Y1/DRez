@@ -321,7 +321,9 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
             std::ranges::for_each(std::views::iota(size_t{0}, primitives.size()), [&](size_t p) {
                 Key key = std::string(mesh.name) + "_p" + std::to_string(p);
-                while (m_meshLookup.contains(key)) {
+                if (auto it = m_meshLookup.find(key); it != m_meshLookup.end()) {
+                    handles.push_back(it->second);
+                    matIdxs.push_back(primitives[p].materialIndex);
                     return;
                 }
 
@@ -387,6 +389,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     std::vector<DXTexture>            textures(asset->textures.size());
     std::vector<DXShaderResourceView> textureSrvs(asset->textures.size());
     std::vector<uint32_t>             textureBindlessIndices(asset->textures.size());
+    std::vector<bool>                 textureIsDuplicate(asset->textures.size(), false);
 
     const auto stageTexture = [&](size_t i) {
         const fastgltf::Texture &texture = asset->textures[i];
@@ -400,6 +403,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             std::scoped_lock<std::mutex> lk{m_textureMutex};
             key = imageNames[imageIndex];
             if (m_textureLookup.contains(key)) {
+                textureIsDuplicate[i] = true;
                 return;
             }
             m_textureLookup.emplace(key, UINT32_MAX);
@@ -465,6 +469,9 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             app.BatchedTextureFlush();
 
             std::ranges::for_each(std::views::iota(batchStart, batchEnd), [&](size_t i) {
+                if (textureIsDuplicate[i]) {
+                    return;
+                }
                 app.GenerateMipmaps(textures[i], textureBindlessIndices[i]);
             });
         }
@@ -472,8 +479,25 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
         batchStart = batchEnd;
     }
 
-    m_textures.insert(m_textures.end(), std::make_move_iterator(textures.begin()), std::make_move_iterator(textures.end()));
-    m_textureSrvs.insert(m_textureSrvs.end(), std::make_move_iterator(textureSrvs.begin()), std::make_move_iterator(textureSrvs.end()));
+    // Duplicates were not loaded; route their bindless indices to the canonical entry so materials resolve correctly.
+    for (size_t i = 0; i < asset->textures.size(); ++i) {
+        if (!textureIsDuplicate[i]) {
+            continue;
+        }
+        if (!asset->textures[i].imageIndex.has_value()) {
+            continue;
+        }
+        textureBindlessIndices[i] = m_textureLookup.at(imageNames[asset->textures[i].imageIndex.value()]);
+    }
+
+    // Only move non-duplicates so m_textures doesn't grow empty slots.
+    for (size_t i = 0; i < asset->textures.size(); ++i) {
+        if (textureIsDuplicate[i]) {
+            continue;
+        }
+        m_textures.push_back(std::move(textures[i]));
+        m_textureSrvs.push_back(std::move(textureSrvs[i]));
+    }
 
     // Translate gltf-local texture index to bindless heap index
     const auto toBindlessIndex = [&textureBindlessIndices](int32_t index) -> int32_t {
@@ -506,6 +530,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             auto pair = m_materialLookup.find(std::string(material.name));
             Key  key{material.name};
             if (pair != m_materialLookup.end()) {
+                gltfMaterialToManagerHandle[i] = pair->second;
                 return;
             }
 
