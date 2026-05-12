@@ -10,6 +10,7 @@
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_resource_helpers.h>
 
+#include "DXDebug.h"
 #include "DXUtils.h"
 #include "Mesh.h"
 #include "ResourceManager.h"
@@ -362,6 +363,8 @@ void Renderer::Render() {
 
     // Shadow pass
     {
+        drez::dx::debug::ScopedEvent passScope{commandList, "Shadow pass"};
+
         commandList->SetGraphicsRootSignature(m_shadow.GetRootSignature());
         commandList->SetPipelineState(m_shadow.GetPipelineState());
         commandList->RSSetViewports(1, &m_shadowViewport);
@@ -388,6 +391,7 @@ void Renderer::Render() {
         std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
             const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
+            drez::dx::debug::ScopedEvent drawScope{commandList, mesh.GetName()};
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
         });
@@ -402,6 +406,8 @@ void Renderer::Render() {
 
     // Gbuffer pass
     {
+        drez::dx::debug::ScopedEvent passScope{commandList, "Gbuffer pass"};
+
         commandList->SetGraphicsRootSignature(m_gbuffer.GetRootSignature());
         commandList->SetPipelineState(m_gbuffer.GetPipelineState());
         commandList->RSSetViewports(1, &m_viewport);
@@ -441,6 +447,7 @@ void Renderer::Render() {
         std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
             const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
+            drez::dx::debug::ScopedEvent drawScope{commandList, mesh.GetName()};
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
         });
@@ -448,6 +455,8 @@ void Renderer::Render() {
 
     // Deferred pass
     {
+        drez::dx::debug::ScopedEvent passScope{commandList, "Deferred pass"};
+
         std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
         barriers.reserve(m_gbufferTextures.size() + 1);
         for (const auto &texture: m_gbufferTextures) {
@@ -481,6 +490,8 @@ void Renderer::Render() {
 
     // Skybox pass
     {
+        drez::dx::debug::ScopedEvent passScope{commandList, "Skybox pass"};
+
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_deferredTexture.GetResource(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -506,6 +517,8 @@ void Renderer::Render() {
 
     // Blit pass
     {
+        drez::dx::debug::ScopedEvent passScope{commandList, "Blit pass"};
+
         commandList->SetComputeRootSignature(m_blit.GetRootSignature());
         commandList->SetPipelineState(m_blit.GetPipelineState());
         commandList->SetComputeRoot32BitConstants(0, sizeof(shader_io::BlitUniforms) / sizeof(uint32_t), &m_blitUniforms, 0);
@@ -533,6 +546,8 @@ void Renderer::Render() {
 
     // Copy to present
     {
+        drez::dx::debug::ScopedEvent passScope{commandList, "Copy to present"};
+
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_composedTexture.GetResource(),
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,

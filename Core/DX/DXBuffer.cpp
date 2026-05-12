@@ -7,6 +7,7 @@
 #include <directx/d3dx12.h>
 
 #include "DXApp.h"
+#include "DXDebug.h"
 #include "Debug.h"
 
 DXBuffer::DXBuffer(const DXApp &app, D3D12_HEAP_TYPE heapType, D3D12_HEAP_FLAGS flags, D3D12_RESOURCE_STATES states, uint64_t size, std::string name)
@@ -16,6 +17,8 @@ DXBuffer::DXBuffer(const DXApp &app, D3D12_HEAP_TYPE heapType, D3D12_HEAP_FLAGS 
     auto                    desc = CD3DX12_RESOURCE_DESC::Buffer(size);
     HRESULT result               = app.GetDevice()->CreateCommittedResource(&heapProperties, flags, &desc, states, nullptr, IID_PPV_ARGS(&m_buffer));
     DebugCheckCritical(SUCCEEDED(result), "Failed to create buffer {}, error {:x}", m_name, result);
+
+    drez::dx::debug::SetObjectName(m_buffer.Get(), m_name);
 
     if (heapType == D3D12_HEAP_TYPE_UPLOAD) {
         // Whole size

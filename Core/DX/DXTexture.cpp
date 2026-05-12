@@ -7,6 +7,7 @@
 #include <directx/d3dx12.h>
 
 #include "DXApp.h"
+#include "DXDebug.h"
 #include "DXUtils.h"
 #include "Debug.h"
 
@@ -92,6 +93,8 @@ DXTexture::DXTexture(
                     ->CreateCommittedResource(&heapProperties, heapFlags, &desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_texture));
             DebugCheckCritical(SUCCEEDED(result), "Failed to create texture resource {}", m_name);
         }
+
+        drez::dx::debug::SetObjectName(m_texture.Get(), m_name);
     }
 
 }
