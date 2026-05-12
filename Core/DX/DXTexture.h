@@ -4,9 +4,6 @@
 
 #pragma once
 
-#include "DXUtils.h"
-
-
 #include <string>
 
 #include <directx/d3d12.h>
@@ -28,7 +25,8 @@ public:
         D3D12_HEAP_FLAGS       heapFlags,
         shader_io::SamplerType samplerType,
         std::string            name,
-        DXGI_FORMAT            clearFormat = DXGI_FORMAT_UNKNOWN
+        DXGI_FORMAT            clearFormat = DXGI_FORMAT_UNKNOWN,
+        uint16_t               mipLevels   = 1
     );
 
     DXTexture(const DXTexture &)            = delete;
@@ -56,6 +54,7 @@ private:
     std::string m_name{};
     uint64_t    m_width{};
     uint32_t    m_height{};
+    uint16_t    m_mipLevels{};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_texture{};
     DXGI_FORMAT                            m_format{DXGI_FORMAT_UNKNOWN};

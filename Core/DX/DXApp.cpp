@@ -5,7 +5,6 @@
 #include "DXApp.h"
 
 #include <algorithm>
-#include <ranges>
 #include <string>
 
 #include <directx/d3dx12.h>
@@ -13,10 +12,6 @@
 #include <dxgi1_6.h>
 
 #include "Debug.h"
-
-// TODO: delete
-#include "VertexFormats.h"
-
 
 using Microsoft::WRL::ComPtr;
 
@@ -317,13 +312,8 @@ uint64_t DXApp::GetTextureUploadSize(uint64_t width, uint32_t height, DXGI_FORMA
 }
 
 void DXApp::BeginBatchUpload(uint64_t totalBytes) {
-    m_uploadBuffer = CreateBuffer(
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_HEAP_FLAG_NONE,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        totalBytes,
-        "shared_upload_buffer"
-    );
+    m_uploadBuffer =
+        CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, totalBytes, "shared_upload_buffer");
     m_uploadOffset.store(0, std::memory_order_relaxed);
     m_pendingCopies.clear();
 }
@@ -357,13 +347,9 @@ void DXApp::BatchedTextureFlush() {
 
     ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
         std::vector<CD3DX12_RESOURCE_BARRIER> toCopyDest(m_pendingCopies.size());
-        std::vector<CD3DX12_RESOURCE_BARRIER> toShaderResource(m_pendingCopies.size());
 
         std::ranges::transform(m_pendingCopies, toCopyDest.begin(), [](const PendingCopy &p) {
             return CD3DX12_RESOURCE_BARRIER::Transition(p.dstResource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-        });
-        std::ranges::transform(m_pendingCopies, toShaderResource.begin(), [](const PendingCopy &p) {
-            return CD3DX12_RESOURCE_BARRIER::Transition(p.dstResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         });
 
         commandList->ResourceBarrier(static_cast<uint32_t>(toCopyDest.size()), toCopyDest.data());
@@ -374,8 +360,6 @@ void DXApp::BatchedTextureFlush() {
             const CD3DX12_TEXTURE_COPY_LOCATION src{sharedSrc, p.footprint};
             commandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         });
-
-        commandList->ResourceBarrier(static_cast<uint32_t>(toShaderResource.size()), toShaderResource.data());
     });
 
     m_pendingCopies.clear();

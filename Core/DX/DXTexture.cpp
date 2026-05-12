@@ -20,11 +20,13 @@ DXTexture::DXTexture(
     D3D12_HEAP_FLAGS       heapFlags,
     shader_io::SamplerType samplerType,
     std::string            name,
-    DXGI_FORMAT            clearFormat
+    DXGI_FORMAT            clearFormat,
+    uint16_t               mipLevels
 )
     : m_name(std::move(name))
     , m_width(width)
     , m_height(height)
+    , m_mipLevels(mipLevels)
     , m_format(format)
     , m_samplerType(samplerType) {
     const DXGI_FORMAT effectiveClearFormat = (clearFormat == DXGI_FORMAT_UNKNOWN) ? m_format : clearFormat;
@@ -36,7 +38,7 @@ DXTexture::DXTexture(
             .Width            = width,
             .Height           = height,
             .DepthOrArraySize = 1,
-            .MipLevels        = 1,
+            .MipLevels        = mipLevels,
             .Format           = m_format,
             .SampleDesc       = {.Count = 1, .Quality = 0},
             .Flags            = resourceFlags

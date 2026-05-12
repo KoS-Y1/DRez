@@ -57,4 +57,15 @@ SLANG_PUBLIC struct SkyboxUniforms
     SLANG_PUBLIC uint32_t skyboxIndex;
     uint32_t padding[3];
 };
+
+// Mipmap
+SLANG_PUBLIC static const uint32_t kMipmapThreadX = 8;
+SLANG_PUBLIC static const uint32_t kMipmapThreadY = 8;
+SLANG_PUBLIC struct MipmapUniforms
+{
+    SLANG_PUBLIC uint32_t srcIndex;
+    SLANG_PUBLIC uint32_t dsrIndex;
+    SLANG_PUBLIC uint16_t srcMipLevel;
+    uint16_t paddings[3];
+};
 }

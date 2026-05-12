@@ -106,11 +106,11 @@ void ResourceManager::Init(DXApp &app) {
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             .Buffer                  = {
-                                 .FirstElement        = 0,
-                                 .NumElements         = static_cast<uint32_t>(m_meshInfos.size()),
-                                 .StructureByteStride = sizeof(shader_io::MeshInfo),
-                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
-            },
+                                        .FirstElement        = 0,
+                                        .NumElements         = static_cast<uint32_t>(m_meshInfos.size()),
+                                        .StructureByteStride = sizeof(shader_io::MeshInfo),
+                                        .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+                                        },
         };
         m_meshInfoBufferSrv = app.CreateDXShaderResourceView(m_meshInfoBuffer.GetBuffer(), desc);
     }
@@ -150,11 +150,11 @@ void ResourceManager::Init(DXApp &app) {
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             .Buffer                  = {
-                                 .FirstElement        = 0,
-                                 .NumElements         = static_cast<uint32_t>(m_materialInfo.size()),
-                                 .StructureByteStride = sizeof(shader_io::MaterialInfo),
-                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
-            },
+                                        .FirstElement        = 0,
+                                        .NumElements         = static_cast<uint32_t>(m_materialInfo.size()),
+                                        .StructureByteStride = sizeof(shader_io::MaterialInfo),
+                                        .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+                                        },
         };
         m_materialInfoBufferSrv = app.CreateDXShaderResourceView(m_materialInfoBuffer.GetBuffer(), desc);
     }
@@ -190,11 +190,11 @@ void ResourceManager::Init(DXApp &app) {
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             .Buffer                  = {
-                                 .FirstElement        = 0,
-                                 .NumElements         = static_cast<uint32_t>(m_instanceInfo.size()),
-                                 .StructureByteStride = sizeof(shader_io::InstanceInfo),
-                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
-            },
+                                        .FirstElement        = 0,
+                                        .NumElements         = static_cast<uint32_t>(m_instanceInfo.size()),
+                                        .StructureByteStride = sizeof(shader_io::InstanceInfo),
+                                        .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+                                        },
         };
         m_instanceInfoBufferSrv = app.CreateDXShaderResourceView(m_instanceInfoBuffer.GetBuffer(), desc);
     }
@@ -281,11 +281,11 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
             .Buffer                  = {
-                                 .FirstElement        = 0,
-                                 .NumElements         = static_cast<uint32_t>(gltfBuffer.GetBufferSize() / sizeof(uint32_t)),
-                                 .StructureByteStride = 0,
-                                 .Flags               = D3D12_BUFFER_SRV_FLAG_RAW,
-            },
+                                        .FirstElement        = 0,
+                                        .NumElements         = static_cast<uint32_t>(gltfBuffer.GetBufferSize() / sizeof(uint32_t)),
+                                        .StructureByteStride = 0,
+                                        .Flags               = D3D12_BUFFER_SRV_FLAG_RAW,
+                                        },
         };
         gltfBufferSrv = app.CreateDXShaderResourceView(gltfBuffer.GetBuffer(), desc);
     }
@@ -301,7 +301,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
     std::ranges::for_each(std::views::iota(size_t{0}, asset->meshes.size()), [&](size_t meshIndex) {
         ThreadPool::GetInstance().Enqueue([&, meshIndex]() {
-            const fastgltf::Mesh              &mesh       = asset->meshes[meshIndex];
+            const fastgltf::Mesh                           &mesh       = asset->meshes[meshIndex];
             std::vector<drez::file_system::LoadedPrimitive> primitives = drez::file_system::LoadMesh(asset.value(), mesh, gltfBufferIndex);
 
             DebugCheckCritical(!primitives.empty(), "Failed to load mesh data from {} {}", fileName, mesh.name);
@@ -325,7 +325,6 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 m_meshInfos.emplace_back(primitives[p].meshInfo);
                 handles.push_back(handle);
                 matIdxs.push_back(primitives[p].materialIndex);
-
             });
         });
     });
@@ -403,14 +402,18 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
         auto width  = static_cast<uint32_t>(std::get<0>(images[imageIndex]));
         auto height = static_cast<uint32_t>(std::get<1>(images[imageIndex]));
 
+        const uint16_t mipLevels = std::floor(std::log2(std::max(width, height))) + 1;
+
         textures[i] = app.CreateTexture(
             width,
             height,
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            D3D12_RESOURCE_FLAG_NONE,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, // For generating mipmaps
             D3D12_HEAP_FLAG_NONE,
             texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : shader_io::SamplerType::Nearest,
-            key
+            key,
+            DXGI_FORMAT_UNKNOWN,
+            mipLevels
         );
         app.BatchedTextureUpload(textures[i], std::get<2>(images[imageIndex]));
 
@@ -511,7 +514,6 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             m_materialInfo.push_back(materialInfo);
             m_materialKeys.push_back(key);
             gltfMaterialToManagerHandle[i] = materialHandle;
-
         });
     });
 
@@ -523,17 +525,24 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     const fastgltf::Scene  &scene    = asset->scenes[sceneIndex];
     const DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
     std::ranges::for_each(scene.nodeIndices, [&](size_t rootNodeIndex) {
-        EmitNodeInstances(asset.value(), rootNodeIndex, identity, meshHandlesPerGltfMesh, primMaterialIndicesPerGltfMesh, gltfMaterialToManagerHandle);
+        EmitNodeInstances(
+            asset.value(),
+            rootNodeIndex,
+            identity,
+            meshHandlesPerGltfMesh,
+            primMaterialIndicesPerGltfMesh,
+            gltfMaterialToManagerHandle
+        );
     });
 }
 
 void ResourceManager::EmitNodeInstances(
-    const fastgltf::Asset                          &asset,
-    size_t                                          nodeIndex,
-    const DirectX::XMMATRIX                        &parentTransform,
-    const std::vector<std::vector<uint32_t>>       &meshHandlesPerGltfMesh,
-    const std::vector<std::vector<int>>            &primMaterialIndicesPerGltfMesh,
-    const std::vector<uint32_t>                    &gltfMaterialToManagerHandle
+    const fastgltf::Asset                    &asset,
+    size_t                                    nodeIndex,
+    const DirectX::XMMATRIX                  &parentTransform,
+    const std::vector<std::vector<uint32_t>> &meshHandlesPerGltfMesh,
+    const std::vector<std::vector<int>>      &primMaterialIndicesPerGltfMesh,
+    const std::vector<uint32_t>              &gltfMaterialToManagerHandle
 ) {
     const fastgltf::Node &node = asset.nodes[nodeIndex];
 
@@ -549,10 +558,22 @@ void ResourceManager::EmitNodeInstances(
             // glTF matrices are column-major; transpose into XMMATRIX row-major layout
             [](const fastgltf::math::fmat4x4 &mat) -> DirectX::XMMATRIX {
                 return DirectX::XMMATRIX(
-                    mat.col(0)[0], mat.col(0)[1], mat.col(0)[2], mat.col(0)[3],
-                    mat.col(1)[0], mat.col(1)[1], mat.col(1)[2], mat.col(1)[3],
-                    mat.col(2)[0], mat.col(2)[1], mat.col(2)[2], mat.col(2)[3],
-                    mat.col(3)[0], mat.col(3)[1], mat.col(3)[2], mat.col(3)[3]
+                    mat.col(0)[0],
+                    mat.col(0)[1],
+                    mat.col(0)[2],
+                    mat.col(0)[3],
+                    mat.col(1)[0],
+                    mat.col(1)[1],
+                    mat.col(1)[2],
+                    mat.col(1)[3],
+                    mat.col(2)[0],
+                    mat.col(2)[1],
+                    mat.col(2)[2],
+                    mat.col(2)[3],
+                    mat.col(3)[0],
+                    mat.col(3)[1],
+                    mat.col(3)[2],
+                    mat.col(3)[3]
                 );
             }
         },
@@ -562,9 +583,9 @@ void ResourceManager::EmitNodeInstances(
     const DirectX::XMMATRIX worldTransform = XMMatrixMultiply(localTransform, parentTransform);
 
     if (node.meshIndex.has_value()) {
-        const size_t       meshIdx = node.meshIndex.value();
-        const auto        &handles = meshHandlesPerGltfMesh[meshIdx];
-        const auto        &matIdxs = primMaterialIndicesPerGltfMesh[meshIdx];
+        const size_t meshIdx = node.meshIndex.value();
+        const auto  &handles = meshHandlesPerGltfMesh[meshIdx];
+        const auto  &matIdxs = primMaterialIndicesPerGltfMesh[meshIdx];
         std::ranges::for_each(std::views::iota(size_t{0}, handles.size()), [&](size_t p) {
             if (matIdxs[p] < 0) {
                 DebugWarning("Primitive {} of glTF mesh {} has no material; skipping instance", p, meshIdx);

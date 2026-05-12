@@ -91,9 +91,10 @@ public:
         D3D12_HEAP_FLAGS       heapFlags,
         shader_io::SamplerType samplerType,
         std::string            name,
-        DXGI_FORMAT            clearFormat = DXGI_FORMAT_UNKNOWN
+        DXGI_FORMAT            clearFormat = DXGI_FORMAT_UNKNOWN,
+        uint16_t               mipLevels   = 1
     ) {
-        return DXTexture{*this, width, height, format, resourceFlags, heapFlags, samplerType, name, clearFormat};
+        return DXTexture{*this, width, height, format, resourceFlags, heapFlags, samplerType, name, clearFormat, mipLevels};
     }
 
     [[nodiscard]] DXShaderResourceView CreateDXShaderResourceView(ID3D12Resource *resource, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
@@ -120,10 +121,12 @@ public:
 
 public:
     // Batch upload texture
-    void                       BeginBatchUpload(uint64_t totalBytes);
-    void                       BatchedTextureUpload(const DXTexture &texture, const void *data);
-    void                       BatchedTextureFlush();
-    [[nodiscard]] uint64_t     GetTextureUploadSize(uint64_t width, uint32_t height, DXGI_FORMAT format) const;
+    void                   BeginBatchUpload(uint64_t totalBytes);
+    void                   BatchedTextureUpload(const DXTexture &texture, const void *data);
+    void                   BatchedTextureFlush();
+    [[nodiscard]] uint64_t GetTextureUploadSize(uint64_t width, uint32_t height, DXGI_FORMAT format) const;
+
+    void GenerateMipmaps(DXTexture &texture);
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};

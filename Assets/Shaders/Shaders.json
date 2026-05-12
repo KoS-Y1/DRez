@@ -4,6 +4,7 @@
         "../Assets/Shaders/deferred.slang",
         "../Assets/Shaders/skybox.slang",
         "../Assets/Shaders/blit.slang",
-        "../Assets/Shaders/shadow.slang"
+        "../Assets/Shaders/shadow.slang",
+        "../Assets/Shaders/mipmap.slang"
     ]
 }

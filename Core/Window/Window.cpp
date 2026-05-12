@@ -14,10 +14,8 @@
 #include "Renderer.h"
 
 namespace {
-constexpr int kMaxWindowWidth{1600};
-constexpr int kMaxWindowHeight{900};
-constexpr int kMinWindowWidth{640};
-constexpr int kMinWindowHeight{360};
+constexpr int kMaxWindowWidth{2040};
+constexpr int kMaxWindowHeight{1080};
 
 constexpr DirectX::XMFLOAT3 kForward{0.0f, 0.0f, -1.0f};
 constexpr DirectX::XMFLOAT3 kBackward{0.0f, 0.0f, 1.0f};
@@ -32,9 +30,6 @@ Window::Window()
     , m_height(kMaxWindowHeight) {
     m_window = SDL_CreateWindow("DRez", m_width, m_height, SDL_WINDOW_HIGH_PIXEL_DENSITY);
     DebugCheckCritical(m_window != nullptr, "Failed to create window");
-
-    SDL_SetWindowMaximumSize(m_window, kMaxWindowWidth, kMaxWindowHeight);
-    SDL_SetWindowMinimumSize(m_window, kMinWindowWidth, kMinWindowHeight);
 
     m_dxApp = std::make_unique<DXApp>(GetHWND());
 }

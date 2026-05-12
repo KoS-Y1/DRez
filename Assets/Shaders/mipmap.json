@@ -1,0 +1,4 @@
+{
+    "shader": "../Assets/Shaders/mipmap.slang",
+    "name": "mipmap"
+}
