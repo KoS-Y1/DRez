@@ -58,21 +58,27 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     const float3 F0 = lerp(float3(0.04f), albedo, metallic);
 
     const float3 L = normalize(pushConstants.lightDir);
-    const float3 brdf = CalculateBRDF(N, V, L, albedo, roughness, metallic, pushConstants.lightColor, pushConstants.lightIntensity);
+    const float3 brdf =
+        CalculateBRDF(N, V, L, albedo, roughness, metallic, pushConstants.lightColor, pushConstants.lightIntensity);
 
     const Texture2D<float4> irradianceTex = (DescriptorHandle<Texture2D<float4>>)uint2(info.irradianceIndex, 0);
     const Texture2D<float4> specularTex = (DescriptorHandle<Texture2D<float4>>)uint2(info.specularIndex, 0);
     const Texture2D<float4> brdfLutTex = (DescriptorHandle<Texture2D<float4>>)uint2(info.brdfLutIndex, 0);
 
-    const float3 ibl = CalculateIBL(N, NdotV, R, F0, albedo, roughness, metallic, ao,
-                                     irradianceTex, specularTex, brdfLutTex, gNearest);
+    const float3 ibl = CalculateIBL(N, NdotV, R, F0, albedo, roughness, metallic, ao, irradianceTex, specularTex,
+                                    brdfLutTex, gNearest);
 
     // Shadow
     const Texture2D<float> shadowMap = (DescriptorHandle<Texture2D<float>>)uint2(info.shadowMapIndex, 0);
     const float4 lightSpacePos = mul(float4(worldPos, 1.0f), pushConstants.lightSpaceMatrix);
     const float shadow = CalculateShadow(lightSpacePos, L, N, shadowMap, gShadow);
 
-    const float3 color = ibl + emissive + brdf * shadow;
+    // const float3 color = ibl + emissive + brdf * shadow;
+    const float3 color = ibl + emissive + brdf;
 
-    dst[px] = float4(color, 1.0f);
+    const uint id = uint(sample0.w);
+    const float3 dbg =
+        float3(frac(float(id) * 0.61803398f), frac(float(id) * 0.41421356f), frac(float(id) * 0.31830988f));
+    dst[px] = float4(dbg, 1.0f);
+    // dst[px] = float4(color, 1.0f);
 }

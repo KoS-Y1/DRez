@@ -33,6 +33,7 @@ target_link_libraries(Files PUBLIC
         simdjson::simdjson
         Stb
         fastgltf::fastgltf
+        Microsoft::DirectXMath
         Debug
         Shader
 )

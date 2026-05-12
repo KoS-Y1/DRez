@@ -9,6 +9,7 @@
 
 #include <directx/d3d12.h>
 #include <directx/d3dx12.h>
+#include <directxmath.h>
 
 namespace drez::dx::pipeline {
 // Shared static samplers bound at fixed registers for every pipeline:
@@ -31,6 +32,7 @@ struct GraphicsPipelineConfig {
     DXGI_SAMPLE_DESC         sample{};
 
     D3D_PRIMITIVE_TOPOLOGY primitiveTopology{};
+
 
     explicit GraphicsPipelineConfig(std::string_view inputFile);
 };

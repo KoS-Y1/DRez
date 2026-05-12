@@ -194,7 +194,7 @@ DXApp::DXApp(HWND hwnd) {
         m_dsvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
         desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        desc.NumDescriptors = 1024;
+        desc.NumDescriptors = 10000;
         desc.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         result              = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_descriptorHeap));
         DebugCheckCritical(SUCCEEDED(result), "Failed to create descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));

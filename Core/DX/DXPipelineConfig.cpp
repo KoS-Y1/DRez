@@ -196,16 +196,11 @@ const std::vector<CD3DX12_STATIC_SAMPLER_DESC> &GetStaticSamplers() {
         CD3DX12_STATIC_SAMPLER_DESC{0, D3D12_FILTER_MIN_MAG_MIP_POINT},
         CD3DX12_STATIC_SAMPLER_DESC{1, D3D12_FILTER_MIN_MAG_MIP_LINEAR},
         CD3DX12_STATIC_SAMPLER_DESC{
-            2,
-            D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-            0.0f,
-            16,
-            D3D12_COMPARISON_FUNC_LESS_EQUAL,
-            D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-        },
+                                    2, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+                                    D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+                                    D3D12_TEXTURE_ADDRESS_MODE_BORDER, 0.0f,
+                                    16, D3D12_COMPARISON_FUNC_LESS_EQUAL,
+                                    D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, },
     };
     return samplers;
 }
@@ -240,6 +235,7 @@ GraphicsPipelineConfig::GraphicsPipelineConfig(std::string_view inputFile) {
 
     const JsonFile sampleFile = json.Field("sample");
     sample                    = GetSample(sampleFile);
+
 }
 
 ComputePipelineConfig::ComputePipelineConfig(std::string_view inputFile) {

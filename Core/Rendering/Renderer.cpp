@@ -50,13 +50,13 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     // Light-space matrix
     {
         using namespace DirectX;
-        const XMVECTOR L              = XMVector3Normalize(XMLoadFloat3(&kLightDir));
-        const XMVECTOR sceneCenter    = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-        const XMVECTOR lightPos       = XMVectorAdd(sceneCenter, XMVectorScale(L, kLightDistance));
-        const XMVECTOR worldUp        = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-        const XMMATRIX lightView      = XMMatrixLookAtRH(lightPos, sceneCenter, worldUp);
-        const XMMATRIX lightProj      = XMMatrixOrthographicRH(kShadowOrthoSize, kShadowOrthoSize, kShadowNear, kShadowFar);
-        const XMMATRIX lightViewProj  = XMMatrixMultiply(lightView, lightProj);
+        const XMVECTOR L             = XMVector3Normalize(XMLoadFloat3(&kLightDir));
+        const XMVECTOR sceneCenter   = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+        const XMVECTOR lightPos      = XMVectorAdd(sceneCenter, XMVectorScale(L, kLightDistance));
+        const XMVECTOR worldUp       = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        const XMMATRIX lightView     = XMMatrixLookAtRH(lightPos, sceneCenter, worldUp);
+        const XMMATRIX lightProj     = XMMatrixOrthographicRH(kShadowOrthoSize, kShadowOrthoSize, kShadowNear, kShadowFar);
+        const XMMATRIX lightViewProj = XMMatrixMultiply(lightView, lightProj);
         XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
     }
 
@@ -379,9 +379,9 @@ void Renderer::Render() {
         commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &shadowUniforms, 0);
 
         std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
-            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
+            const Mesh                   &mesh = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
-            drez::dx::debug::ScopedEvent drawScope{commandList, mesh.GetName()};
+            drez::dx::debug::ScopedEvent  drawScope{commandList, mesh.GetName()};
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
         });
@@ -424,7 +424,7 @@ void Renderer::Render() {
         const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
         commandList->OMSetRenderTargets(rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
 
-        static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 0.0f};
+        static constexpr float rtvClearColor[]{1.0f, 0.0f, 0.0f, 1.0f};
         for (const auto &handle: rtvHandles) {
             commandList->ClearRenderTargetView(handle, rtvClearColor, 0, nullptr);
         }
@@ -435,9 +435,9 @@ void Renderer::Render() {
         commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &m_globalUniforms[frameIndex], 0);
 
         std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
-            const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
+            const Mesh                   &mesh = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
             const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
-            drez::dx::debug::ScopedEvent drawScope{commandList, mesh.GetName()};
+            drez::dx::debug::ScopedEvent  drawScope{commandList, mesh.GetName()};
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
         });

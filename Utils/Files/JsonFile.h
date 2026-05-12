@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 
+#include <directxmath.h>
 #include <simdjson.h>
 
 #include "Debug.h"
@@ -19,7 +20,7 @@ void DebugCheckCriticalSimdJson(const simdjson::error_code error, const spdlog::
     DebugCheckCritical(error == simdjson::SUCCESS, failMessage, std::forward<Args>(args)..., simdjson::error_message(error));
 }
 
-// simdjson::error_code JsonConvert(simdjson::dom::element, glm::vec3 &);
+simdjson::error_code JsonConvert(simdjson::dom::element, DirectX::XMFLOAT4 &);
 simdjson::error_code JsonConvert(simdjson::dom::element, std::string &);
 simdjson::error_code JsonConvert(simdjson::dom::element, double &);
 simdjson::error_code JsonConvert(simdjson::dom::element, float &);
@@ -36,6 +37,35 @@ simdjson::error_code JsonGet(simdjson::dom::object &obj, std::string_view key, T
 template<typename T>
 simdjson::error_code JsonConvert(simdjson::dom::element element, T &out) {
     return element.get(out);
+}
+
+inline simdjson::error_code JsonConvert(simdjson::dom::element element, DirectX::XMFLOAT4 &out) {
+    simdjson::dom::object obj;
+    simdjson::error_code  err = element.get(obj);
+    if (err) {
+        return err;
+    }
+
+    float x, y, z, w;
+    err = JsonGet(obj, "x", x);
+    if (err) {
+        return err;
+    }
+
+    err = JsonGet(obj, "y", y);
+    if (err) {
+        return err;
+    }
+
+    err = JsonGet(obj, "z", z);
+    if (err) {
+        return err;
+    }
+
+    err = JsonGet(obj, "w", w);
+    out = DirectX::XMFLOAT4(x, y, z, w);
+
+    return err;
 }
 
 inline simdjson::error_code JsonConvert(simdjson::dom::element element, double &out) {
@@ -182,7 +212,8 @@ public:
     }
 
     JsonFile(simdjson::dom::element doc, bool valid)
-        : m_doc(doc), m_valid(valid) {}
+        : m_doc(doc)
+        , m_valid(valid) {}
 
     JsonFile() = delete;
 

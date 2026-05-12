@@ -29,10 +29,10 @@ internal float3 Sample(const float2 uv, const Texture2D texture, const shader_io
 {
     if (sampler == shader_io::SamplerType::Linear)
     {
-        return texture.SampleLevel(gLinear, uv, 0).rgb;
+        return texture.Sample(gLinear, uv).rgb;
     }
 
-    return texture.SampleLevel(gNearest, uv, 0).rgb;
+    return texture.Sample(gNearest, uv).rgb;
 }
 
 [shader("vertex")]

@@ -198,6 +198,12 @@ void ResourceManager::Init(DXApp &app) {
         };
         m_instanceInfoBufferSrv = app.CreateDXShaderResourceView(m_instanceInfoBuffer.GetBuffer(), desc);
     }
+
+    for (uint32_t i = 0; i < ResourceManager::GetInstance().GetInstanceCount(); ++i) {
+        const auto &info = ResourceManager::GetInstance().GetInstanceInfo(i);
+        const auto &mesh = ResourceManager::GetInstance().GetMesh(info.meshHandle);
+        DebugInfo("instance[{}] mesh='{}' materialHandle={}", i, mesh.GetName(), info.materialHandle);
+    }
 }
 
 uint32_t ResourceManager::GetMeshHandle(const Key &key) const {
@@ -316,7 +322,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             std::ranges::for_each(std::views::iota(size_t{0}, primitives.size()), [&](size_t p) {
                 Key key = std::string(mesh.name) + "_p" + std::to_string(p);
                 while (m_meshLookup.contains(key)) {
-                    key += "_copy";
+                    return;
                 }
 
                 const uint32_t handle = static_cast<uint32_t>(m_meshes.size());
@@ -394,7 +400,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             std::scoped_lock<std::mutex> lk{m_textureMutex};
             key = imageNames[imageIndex];
             if (m_textureLookup.contains(key)) {
-                key += "_copy";
+                return;
             }
             m_textureLookup.emplace(key, UINT32_MAX);
         }
@@ -500,7 +506,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             auto pair = m_materialLookup.find(std::string(material.name));
             Key  key{material.name};
             if (pair != m_materialLookup.end()) {
-                key += "_copy";
+                return;
             }
 
             materialInfo.albedoSamplerType   = toSamplerType(materialInfo.albedoTextureIndex);
