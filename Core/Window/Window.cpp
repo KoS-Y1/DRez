@@ -55,8 +55,8 @@ void Window::Run() {
             {SDL_SCANCODE_S, kBackward},
             {SDL_SCANCODE_D, kRight   },
             {SDL_SCANCODE_A, kLeft    },
-            {SDL_SCANCODE_Q, kUp      },
-            {SDL_SCANCODE_E, kDown    },
+            {SDL_SCANCODE_Q, kDown      },
+            {SDL_SCANCODE_E, kUp    },
         };
 
         // Camera movement
@@ -76,10 +76,6 @@ void Window::Run() {
             }
         }
 
-        // // Camera zoom
-        // if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-        //     camera.ProcessZoom(event.wheel.y);
-        // }
     };
 
     m_running = true;

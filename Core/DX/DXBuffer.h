@@ -34,6 +34,8 @@ public:
 
     [[nodiscard]] uint64_t GetBufferSize() const { return m_bufferSize; }
 
+    [[nodiscard]] const void *GetMappedData() const { return m_mappedData; }
+
 private:
     std::string                            m_name{};
     Microsoft::WRL::ComPtr<ID3D12Resource> m_buffer;

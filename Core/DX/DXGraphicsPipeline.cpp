@@ -68,7 +68,6 @@ DXGraphicsPipeline::DXGraphicsPipeline(DXApp &app, std::string_view filePath) {
 
         const D3D12_SHADER_BYTECODE vsBytecode = GetShaderByteCode(SLANG_STAGE_VERTEX);
         const D3D12_SHADER_BYTECODE psBytecode = GetShaderByteCode(SLANG_STAGE_PIXEL);
-        DebugInfo("Pipeline {}: VS={} bytes, PS={} bytes", m_name, vsBytecode.BytecodeLength, psBytecode.BytecodeLength);
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{
             .pRootSignature        = m_rootSignature.Get(),

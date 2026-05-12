@@ -69,10 +69,10 @@ SLANG_PUBLIC struct InstanceInfo
 
 SLANG_PUBLIC struct DeferredInfo
 {
-    SLANG_PUBLIC uint32_t gbuffer0Index;
-    SLANG_PUBLIC uint32_t gbuffer1Index;
-    SLANG_PUBLIC uint32_t gbuffer2Index;
-    SLANG_PUBLIC uint32_t gbuffer3Index;
+    SLANG_PUBLIC uint32_t gbuffer0Index;    // worldPos + instanceId
+    SLANG_PUBLIC uint32_t gbuffer1Index;    // normal + roughness 
+    SLANG_PUBLIC uint32_t gbuffer2Index;    // albedo + ao
+    SLANG_PUBLIC uint32_t gbuffer3Index;    // emissive + metallic
 
     SLANG_PUBLIC uint32_t irradianceIndex;
     SLANG_PUBLIC uint32_t specularIndex;

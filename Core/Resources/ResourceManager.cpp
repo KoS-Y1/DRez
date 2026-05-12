@@ -327,7 +327,6 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 handles.push_back(handle);
                 matIdxs.push_back(primitives[p].materialIndex);
 
-                DebugInfo("Mesh {} is loaded successfully", key);
             });
         });
     });
@@ -413,7 +412,6 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             textureBindlessIndices[i] = textureSrvs[i].GetIndex();
             m_textureLookup.emplace(key, textureBindlessIndices[i]);
 
-            DebugInfo("Texture {} is loaded successfully", key);
         });
     }
 
@@ -471,7 +469,6 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             m_materialKeys.push_back(key);
             gltfMaterialToManagerHandle[i] = materialHandle;
 
-            DebugInfo("Material {} is loaded successfully", key);
         });
     });
 

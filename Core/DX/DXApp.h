@@ -21,6 +21,7 @@
 #include "DXUnorderedAccessView.h"
 
 #include <directx/d3dx12_root_signature.h>
+#include <vector>
 
 struct FrameInfo {
     ID3D12GraphicsCommandList *commandList;
@@ -83,16 +84,16 @@ public:
     }
 
     [[nodiscard]] DXTexture CreateTexture(
-        uint64_t                width,
-        uint32_t                height,
-        DXGI_FORMAT             format,
-        uint32_t                formatSize,
-        D3D12_RESOURCE_FLAGS    resourceFlags,
-        D3D12_HEAP_FLAGS        heapFlags,
-        shader_io::SamplerType  samplerType,
-        const void             *data,
-        std::string             name,
-        DXGI_FORMAT             clearFormat = DXGI_FORMAT_UNKNOWN
+        uint64_t               width,
+        uint32_t               height,
+        DXGI_FORMAT            format,
+        uint32_t               formatSize,
+        D3D12_RESOURCE_FLAGS   resourceFlags,
+        D3D12_HEAP_FLAGS       heapFlags,
+        shader_io::SamplerType samplerType,
+        const void            *data,
+        std::string            name,
+        DXGI_FORMAT            clearFormat = DXGI_FORMAT_UNKNOWN
     ) {
         return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, samplerType, data, name, clearFormat};
     }
@@ -119,6 +120,10 @@ public:
 
     uint32_t AllocateBindlessIndex() { return m_nextBindlessIndex.fetch_add(1, std::memory_order_relaxed); }
 
+public:
+    // Batch upload texture
+    void BatchedTextureUpload(const DXTexture &texture, const void *data, uint32_t formatSize);
+    void BatchedTextureFlash();
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -174,4 +179,15 @@ private:
     std::mutex m_immediateMutes{};
 
     void WaitForFence(uint64_t fenceValue, uint64_t timeout = kPointOneSecond);
+
+private:
+    // Batch upload
+    struct PendingCopy {
+        ID3D12Resource                    *dstResource{};
+        DXBuffer                           stagingBuffer{};
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    };
+
+    std::mutex               m_batchUploadMutex{};
+    std::vector<PendingCopy> m_pendingCopies{};
 };

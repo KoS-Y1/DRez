@@ -195,7 +195,6 @@ std::optional<std::tuple<int, int, unsigned char *>> LoadImage(const std::string
     int height{};
     int channels{};
 
-    DebugInfo("Loading image from {}", path);
     unsigned char *data = stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
     if (!data) {

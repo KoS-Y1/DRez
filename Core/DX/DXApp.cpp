@@ -212,6 +212,7 @@ DXApp::DXApp(HWND hwnd) {
 }
 
 DXApp::~DXApp() {
+    WaitForFence(SignalQueue());
     CloseHandle(m_fenceEvent);
 }
 
@@ -294,6 +295,36 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDepthStencilViewHandle(int32_t index) {
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDescriptorHandle(int32_t index) {
     return {m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(), index, m_descriptorSize};
+}
+
+void DXApp::BatchedTextureUpload(const DXTexture &texture, const void *data, uint32_t formatSize) {
+    uint64_t width  = texture.GetWidth();
+    uint32_t height = texture.GetHeight();
+
+    DXBuffer stagingBuffer = CreateBuffer(
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_HEAP_FLAG_NONE,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        width * height * formatSize,
+        "staging_buffer" + std::string(texture.GetName())
+    );
+
+    D3D12_SUBRESOURCE_FOOTPRINT subFootprint{
+        .Format   = texture.GetFormat(),
+        .Width    = static_cast<uint32_t>(width),
+        .Height   = height,
+        .Depth    = 1,
+        .RowPitch = formatSize * static_cast<uint32_t>(width)
+    };
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{.Offset = 0, .Footprint = subFootprint};
+
+    std::lock_guard<std::mutex> lock(m_batchUploadMutex);
+    m_pendingCopies.emplace_back(texture.GetResource(), std::move(stagingBuffer), std::move(footprint));
+}
+
+void DXApp::BatchedTextureFlash() {
+    // TODO: flush
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {
