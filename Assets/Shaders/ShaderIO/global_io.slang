@@ -64,8 +64,8 @@ SLANG_PUBLIC static const uint32_t kMipmapThreadY = 8;
 SLANG_PUBLIC struct MipmapUniforms
 {
     SLANG_PUBLIC uint32_t srcIndex;
-    SLANG_PUBLIC uint32_t dsrIndex;
-    SLANG_PUBLIC uint16_t srcMipLevel;
-    uint16_t paddings[3];
+    SLANG_PUBLIC uint32_t dstIndex;
+    SLANG_PUBLIC uint32_t srcMipLevel;
+    uint32_t padding;
 };
 }

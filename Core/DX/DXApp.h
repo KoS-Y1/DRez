@@ -126,7 +126,7 @@ public:
     void                   BatchedTextureFlush();
     [[nodiscard]] uint64_t GetTextureUploadSize(uint64_t width, uint32_t height, DXGI_FORMAT format) const;
 
-    void GenerateMipmaps(DXTexture &texture);
+    void GenerateMipmaps(DXTexture &texture, uint32_t srcSrvIndex);
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -194,4 +194,7 @@ private:
     std::atomic<uint64_t>    m_uploadOffset{0};
     std::mutex               m_batchUploadMutex{};
     std::vector<PendingCopy> m_pendingCopies{};
+
+    // Mipmap generation
+    DXComputePipeline m_mipmapPipeline{};
 };

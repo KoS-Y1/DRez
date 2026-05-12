@@ -50,6 +50,8 @@ public:
 
     [[nodiscard]] uint32_t GetHeight() const { return m_height; }
 
+    [[nodiscard]] uint16_t GetMipLevels() const { return m_mipLevels; }
+
 private:
     std::string m_name{};
     uint64_t    m_width{};

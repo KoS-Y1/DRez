@@ -5,6 +5,7 @@
 #include "DXApp.h"
 
 #include <algorithm>
+#include <ranges>
 #include <string>
 
 #include <directx/d3dx12.h>
@@ -12,6 +13,7 @@
 #include <dxgi1_6.h>
 
 #include "Debug.h"
+#include "global_io.slang"
 
 using Microsoft::WRL::ComPtr;
 
@@ -206,6 +208,9 @@ DXApp::DXApp(HWND hwnd) {
             DebugCheckCritical(SUCCEEDED(result), "Failed to get swapchain image #{}, error 0x{:x}", i, static_cast<uint32_t>(result));
         }
     }
+
+    // Mipmap generation pipeline
+    m_mipmapPipeline = CreateComputePipeline("../Assets/Shaders/mipmap.json");
 }
 
 DXApp::~DXApp() {
@@ -365,6 +370,95 @@ void DXApp::BatchedTextureFlush() {
     m_pendingCopies.clear();
     m_uploadBuffer = {};
     m_uploadOffset.store(0, std::memory_order_relaxed);
+}
+
+void DXApp::GenerateMipmaps(DXTexture &texture, uint32_t srcSrvIndex) {
+    const uint16_t mipLevels = texture.GetMipLevels();
+    if (mipLevels <= 1) {
+        return;
+    }
+
+    // One UAV per non-base mip slice
+    std::vector<DXUnorderedAccessView> mipUavs;
+    mipUavs.reserve(mipLevels - 1);
+    std::ranges::for_each(std::views::iota(uint16_t{1}, mipLevels), [&](uint16_t m) {
+        const D3D12_UNORDERED_ACCESS_VIEW_DESC desc{
+            .Format        = texture.GetFormat(),
+            .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+            .Texture2D     = {.MipSlice = m, .PlaneSlice = 0},
+        };
+        mipUavs.push_back(CreateDXUnorderedAccessView(texture.GetResource(), desc));
+    });
+
+    ImmediateSubmit([&](ID3D12GraphicsCommandList *commandList) {
+        const std::vector<ID3D12DescriptorHeap *> heaps{m_descriptorHeap.Get()};
+        commandList->SetDescriptorHeaps(static_cast<uint32_t>(heaps.size()), heaps.data());
+
+        commandList->SetComputeRootSignature(m_mipmapPipeline.GetRootSignature());
+        commandList->SetPipelineState(m_mipmapPipeline.GetPipelineState());
+
+        // Initial barriers: mip 0 → sample state, mips 1..N-1 → UAV
+        std::vector<CD3DX12_RESOURCE_BARRIER> initBarriers;
+        initBarriers.reserve(mipLevels);
+        initBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+            texture.GetResource(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            0
+        ));
+        std::ranges::for_each(std::views::iota(uint16_t{1}, mipLevels), [&](uint16_t m) {
+            initBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+                texture.GetResource(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                m
+            ));
+        });
+        commandList->ResourceBarrier(static_cast<uint32_t>(initBarriers.size()), initBarriers.data());
+
+        // Dispatch one downsample per mip pair: read mip i, write mip i+1
+        const uint64_t baseWidth  = texture.GetWidth();
+        const uint32_t baseHeight = texture.GetHeight();
+        std::ranges::for_each(std::views::iota(uint16_t{0}, static_cast<uint16_t>(mipLevels - 1)), [&](uint16_t i) {
+            const uint32_t dstMip    = static_cast<uint32_t>(i + 1);
+            const uint32_t dstWidth  = std::max<uint32_t>(1, static_cast<uint32_t>(baseWidth) >> dstMip);
+            const uint32_t dstHeight = std::max<uint32_t>(1, baseHeight >> dstMip);
+
+            const shader_io::MipmapUniforms uniforms{
+                .srcIndex    = srcSrvIndex,
+                .dstIndex    = mipUavs[i].GetIndex(),
+                .srcMipLevel = i,
+                .padding     = 0,
+            };
+            commandList->SetComputeRoot32BitConstants(0, sizeof(uniforms) / sizeof(uint32_t), &uniforms, 0);
+
+            const uint32_t groupX = static_cast<uint32_t>(std::ceil(static_cast<float>(dstWidth) / shader_io::kMipmapThreadX));
+            const uint32_t groupY = static_cast<uint32_t>(std::ceil(static_cast<float>(dstHeight) / shader_io::kMipmapThreadY));
+            commandList->Dispatch(groupX, groupY, 1);
+
+            // Hand off the just-written mip to the next iteration as a sample source
+            const auto b = CD3DX12_RESOURCE_BARRIER::Transition(
+                texture.GetResource(),
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                dstMip
+            );
+            commandList->ResourceBarrier(1, &b);
+        });
+
+        // All mips end in NON_PIXEL_SHADER_RESOURCE; transition to PIXEL_SHADER_RESOURCE for rendering
+        std::vector<CD3DX12_RESOURCE_BARRIER> finalBarriers;
+        finalBarriers.reserve(mipLevels);
+        std::ranges::for_each(std::views::iota(uint16_t{0}, mipLevels), [&](uint16_t m) {
+            finalBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+                texture.GetResource(),
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                m
+            ));
+        });
+        commandList->ResourceBarrier(static_cast<uint32_t>(finalBarriers.size()), finalBarriers.data());
+    });
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {

@@ -12,7 +12,7 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
 {
     const uint2 px = threadId.xy;
 
-    RWTexture2D<float4> dst = (DescriptorHandle<RWTexture2D<float4>>)uint2(pushConstants.dsrIndex, 0);
+    RWTexture2D<float4> dst = (DescriptorHandle<RWTexture2D<float4>>)uint2(pushConstants.dstIndex, 0);
 
     uint width = 0;
     uint height = 0;

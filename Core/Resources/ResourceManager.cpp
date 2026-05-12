@@ -421,7 +421,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             .Format                  = textures[i].GetFormat(),
             .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
             .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            .Texture2D               = {.MipLevels = 1},
+            .Texture2D               = {.MipLevels = textures[i].GetMipLevels()},
         };
         textureSrvs[i]            = app.CreateDXShaderResourceView(textures[i].GetResource(), desc);
         textureBindlessIndices[i] = textureSrvs[i].GetIndex();
@@ -457,6 +457,10 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
         ThreadPool::GetInstance().WaitIdle();
         if (batchBytes > 0) {
             app.BatchedTextureFlush();
+
+            std::ranges::for_each(std::views::iota(batchStart, batchEnd), [&](size_t i) {
+                app.GenerateMipmaps(textures[i], textureBindlessIndices[i]);
+            });
         }
 
         batchStart = batchEnd;
