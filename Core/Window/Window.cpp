@@ -76,10 +76,10 @@ void Window::Run() {
             }
         }
 
-        // Camera zoom
-        if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-            camera.ProcessZoom(event.wheel.y);
-        }
+        // // Camera zoom
+        // if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+        //     camera.ProcessZoom(event.wheel.y);
+        // }
     };
 
     m_running = true;

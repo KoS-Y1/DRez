@@ -60,8 +60,11 @@ SLANG_PUBLIC struct MeshInfo
 
 SLANG_PUBLIC struct InstanceInfo
 {
+    SLANG_PUBLIC float4x4 transform;
+    SLANG_PUBLIC float4x4 normalMatrix;
     SLANG_PUBLIC uint32_t meshHandle;
     SLANG_PUBLIC uint32_t materialHandle;
+    uint32_t padding[2];
 };
 
 SLANG_PUBLIC struct DeferredInfo

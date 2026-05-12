@@ -5,8 +5,11 @@
 #include "ResourceManager.h"
 
 #include <algorithm>
+#include <ranges>
 
 #include <directx/d3dx12.h>
+#include <directxmath.h>
+#include <fastgltf/types.hpp>
 
 #include "DXApp.h"
 #include "DXUtils.h"
@@ -182,6 +185,19 @@ void ResourceManager::Init(DXApp &app) {
             );
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = DXGI_FORMAT_UNKNOWN,
+            .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Buffer                  = {
+                                 .FirstElement        = 0,
+                                 .NumElements         = static_cast<uint32_t>(m_instanceInfo.size()),
+                                 .StructureByteStride = sizeof(shader_io::InstanceInfo),
+                                 .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+            },
+        };
+        m_instanceInfoBufferSrv = app.CreateDXShaderResourceView(m_instanceInfoBuffer.GetBuffer(), desc);
     }
 }
 
@@ -280,30 +296,41 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     m_gltfBuffers.push_back(std::move(gltfBuffer));
     m_gltfBufferSrvs.push_back(std::move(gltfBufferSrv));
 
-    uint32_t meshHandle{};
-    for (size_t meshIndex = 0; meshIndex < asset->meshes.size(); meshIndex++) {
-        ThreadPool::GetInstance().Enqueue([&, meshIndex]() {
-            const fastgltf::Mesh              &mesh     = asset->meshes[meshIndex];
-            std::optional<shader_io::MeshInfo> meshInfo = drez::file_system::LoadMesh(asset.value(), mesh, gltfBufferIndex);
+    // Per-gltf-mesh handle and material-index tables, populated by the mesh-load tasks below
+    std::vector<std::vector<uint32_t>> meshHandlesPerGltfMesh(asset->meshes.size());
+    std::vector<std::vector<int>>      primMaterialIndicesPerGltfMesh(asset->meshes.size());
 
-            DebugCheckCritical(meshInfo.has_value(), "Failed to load mesh data from {} {}", fileName, mesh.name);
+    std::ranges::for_each(std::views::iota(size_t{0}, asset->meshes.size()), [&](size_t meshIndex) {
+        ThreadPool::GetInstance().Enqueue([&, meshIndex]() {
+            const fastgltf::Mesh              &mesh       = asset->meshes[meshIndex];
+            std::vector<drez::file_system::LoadedPrimitive> primitives = drez::file_system::LoadMesh(asset.value(), mesh, gltfBufferIndex);
+
+            DebugCheckCritical(!primitives.empty(), "Failed to load mesh data from {} {}", fileName, mesh.name);
 
             std::scoped_lock<std::mutex> lk{m_meshMutex};
 
-            auto pair = m_meshLookup.find(std::string(mesh.name));
-            Key  key{mesh.name};
-            if (pair != m_meshLookup.end()) {
-                key += "_copy";
-            }
+            auto &handles = meshHandlesPerGltfMesh[meshIndex];
+            auto &matIdxs = primMaterialIndicesPerGltfMesh[meshIndex];
+            handles.reserve(primitives.size());
+            matIdxs.reserve(primitives.size());
 
-            meshHandle = static_cast<uint32_t>(m_meshes.size());
-            m_meshLookup.emplace(key, meshHandle);
-            m_meshes.emplace_back(meshInfo.value(), key, gltfBufferAddress);
-            m_meshInfos.emplace_back(meshInfo.value());
+            std::ranges::for_each(std::views::iota(size_t{0}, primitives.size()), [&](size_t p) {
+                Key key = std::string(mesh.name) + "_p" + std::to_string(p);
+                while (m_meshLookup.contains(key)) {
+                    key += "_copy";
+                }
 
-            DebugInfo("Mesh {} is loaded successfully", key);
+                const uint32_t handle = static_cast<uint32_t>(m_meshes.size());
+                m_meshLookup.emplace(key, handle);
+                m_meshes.emplace_back(primitives[p].meshInfo, key, gltfBufferAddress);
+                m_meshInfos.emplace_back(primitives[p].meshInfo);
+                handles.push_back(handle);
+                matIdxs.push_back(primitives[p].materialIndex);
+
+                DebugInfo("Mesh {} is loaded successfully", key);
+            });
         });
-    }
+    });
 
     // Load samplers
     std::vector<shader_io::SamplerType> infoSamplers(asset->samplers.size());
@@ -412,10 +439,10 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     };
 
     // Load materials
-    uint32_t materialHandle{};
+    std::vector<uint32_t> gltfMaterialToManagerHandle(asset->materials.size(), 0);
     m_materialInfo.reserve(m_textures.size() + asset->materials.size());
     m_materialKeys.reserve(asset->materials.size() + asset->textures.size());
-    for (size_t i = 0; i < asset->materials.size(); i++) {
+    std::ranges::for_each(std::views::iota(size_t{0}, asset->materials.size()), [&](size_t i) {
         ThreadPool::GetInstance().Enqueue([&, i]() {
             const fastgltf::Material &material     = asset->materials[i];
             shader_io::MaterialInfo   materialInfo = drez::file_system::LoadMaterial(material);
@@ -438,16 +465,83 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
             materialInfo.emissiveTextureIndex = toBindlessIndex(materialInfo.emissiveTextureIndex);
             materialInfo.normalTextureIndex   = toBindlessIndex(materialInfo.normalTextureIndex);
 
-            materialHandle = static_cast<uint32_t>(m_materialInfo.size());
-            m_materialLookup.emplace(key, static_cast<uint32_t>(materialHandle));
+            const uint32_t materialHandle = static_cast<uint32_t>(m_materialInfo.size());
+            m_materialLookup.emplace(key, materialHandle);
             m_materialInfo.push_back(materialInfo);
             m_materialKeys.push_back(key);
+            gltfMaterialToManagerHandle[i] = materialHandle;
 
             DebugInfo("Material {} is loaded successfully", key);
         });
-    }
+    });
 
     ThreadPool::GetInstance().WaitIdle();
 
-    m_instanceInfo.emplace_back(meshHandle, materialHandle);
+    // Scene walk
+    const size_t sceneIndex = asset->defaultScene.has_value() ? asset->defaultScene.value() : 0;
+    DebugCheckCritical(sceneIndex < asset->scenes.size(), "Default scene index out of range in {}", fileName);
+    const fastgltf::Scene  &scene    = asset->scenes[sceneIndex];
+    const DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+    std::ranges::for_each(scene.nodeIndices, [&](size_t rootNodeIndex) {
+        EmitNodeInstances(asset.value(), rootNodeIndex, identity, meshHandlesPerGltfMesh, primMaterialIndicesPerGltfMesh, gltfMaterialToManagerHandle);
+    });
+}
+
+void ResourceManager::EmitNodeInstances(
+    const fastgltf::Asset                          &asset,
+    size_t                                          nodeIndex,
+    const DirectX::XMMATRIX                        &parentTransform,
+    const std::vector<std::vector<uint32_t>>       &meshHandlesPerGltfMesh,
+    const std::vector<std::vector<int>>            &primMaterialIndicesPerGltfMesh,
+    const std::vector<uint32_t>                    &gltfMaterialToManagerHandle
+) {
+    const fastgltf::Node &node = asset.nodes[nodeIndex];
+
+    // glTF node transforms compose in row-vector convention to match the rest of the codebase
+    const DirectX::XMMATRIX localTransform = std::visit(
+        fastgltf::visitor{
+            [](const fastgltf::TRS &trs) -> DirectX::XMMATRIX {
+                const DirectX::XMVECTOR T = DirectX::XMVectorSet(trs.translation[0], trs.translation[1], trs.translation[2], 0.0f);
+                const DirectX::XMVECTOR R = DirectX::XMVectorSet(trs.rotation[0], trs.rotation[1], trs.rotation[2], trs.rotation[3]);
+                const DirectX::XMVECTOR S = DirectX::XMVectorSet(trs.scale[0], trs.scale[1], trs.scale[2], 0.0f);
+                return DirectX::XMMatrixScalingFromVector(S) * DirectX::XMMatrixRotationQuaternion(R) * DirectX::XMMatrixTranslationFromVector(T);
+            },
+            // glTF matrices are column-major; transpose into XMMATRIX row-major layout
+            [](const fastgltf::math::fmat4x4 &mat) -> DirectX::XMMATRIX {
+                return DirectX::XMMATRIX(
+                    mat.col(0)[0], mat.col(0)[1], mat.col(0)[2], mat.col(0)[3],
+                    mat.col(1)[0], mat.col(1)[1], mat.col(1)[2], mat.col(1)[3],
+                    mat.col(2)[0], mat.col(2)[1], mat.col(2)[2], mat.col(2)[3],
+                    mat.col(3)[0], mat.col(3)[1], mat.col(3)[2], mat.col(3)[3]
+                );
+            }
+        },
+        node.transform
+    );
+
+    const DirectX::XMMATRIX worldTransform = XMMatrixMultiply(localTransform, parentTransform);
+
+    if (node.meshIndex.has_value()) {
+        const size_t       meshIdx = node.meshIndex.value();
+        const auto        &handles = meshHandlesPerGltfMesh[meshIdx];
+        const auto        &matIdxs = primMaterialIndicesPerGltfMesh[meshIdx];
+        std::ranges::for_each(std::views::iota(size_t{0}, handles.size()), [&](size_t p) {
+            if (matIdxs[p] < 0) {
+                DebugWarning("Primitive {} of glTF mesh {} has no material; skipping instance", p, meshIdx);
+                return;
+            }
+
+            shader_io::InstanceInfo info{};
+            info.meshHandle     = handles[p];
+            info.materialHandle = gltfMaterialToManagerHandle[matIdxs[p]];
+            DirectX::XMStoreFloat4x4(&info.transform, worldTransform);
+            // TODO: inverse transpose for non-uniform scale support
+            DirectX::XMStoreFloat4x4(&info.normalMatrix, worldTransform);
+            m_instanceInfo.push_back(info);
+        });
+    }
+
+    std::ranges::for_each(node.children, [&](size_t childIdx) {
+        EmitNodeInstances(asset, childIdx, worldTransform, meshHandlesPerGltfMesh, primMaterialIndicesPerGltfMesh, gltfMaterialToManagerHandle);
+    });
 }

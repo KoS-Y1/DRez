@@ -59,16 +59,10 @@ private:
 
 private:
     // Resources
-    std::vector<shader_io::InstanceInfo> m_instances{};
-    std::vector<DirectX::XMFLOAT4X4>     m_instanceTransforms{};
-
     std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
     shader_io::DeferredUniforms                                      m_deferredUniforms{};
     shader_io::SkyboxUniforms                                        m_skyboxUniforms{};
     shader_io::BlitUniforms                                          m_blitUniforms{};
-
-    DXBuffer             m_instanceBuffer{};
-    DXShaderResourceView m_instanceBufferSrv{};
 
     DXBuffer m_skyboxVertexBuffer{};
     D3D12_VERTEX_BUFFER_VIEW m_skyboxVertexBufferView{};

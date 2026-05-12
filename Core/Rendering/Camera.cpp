@@ -19,7 +19,7 @@ constexpr float kMaxFov{179.0f};
 constexpr float kMinFov{0.01f};
 
 constexpr float kSensitivity{0.1f};
-constexpr float kSpeed{0.01f};
+constexpr float kSpeed{0.1f};
 
 constexpr XMFLOAT3 kWorldUpFloat{0.0f, 1.0f, 0.0f};
 } // namespace

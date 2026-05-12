@@ -10,6 +10,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <directxmath.h>
+#include <fastgltf/core.hpp>
+
 #include "DXBUffer.h"
 #include "DXShaderResourceView.h"
 #include "DXTexture.h"
@@ -42,6 +45,12 @@ public:
     [[nodiscard]] uint32_t GetMeshesBindlessIndex() const { return m_meshInfoBufferSrv.GetIndex(); }
 
     [[nodiscard]] uint32_t GetMaterialsBindlessIndex() const { return m_materialInfoBufferSrv.GetIndex(); }
+
+    [[nodiscard]] uint32_t GetInstancesBindlessIndex() const { return m_instanceInfoBufferSrv.GetIndex(); }
+
+    [[nodiscard]] uint32_t GetInstanceCount() const { return static_cast<uint32_t>(m_instanceInfo.size()); }
+
+    [[nodiscard]] const shader_io::InstanceInfo &GetInstanceInfo(uint32_t index) const { return m_instanceInfo[index]; }
 
     [[nodiscard]] uint32_t GetSkyboxBindlessIndex() const { return m_skyboxSrv.GetIndex(); }
 
@@ -83,6 +92,7 @@ private:
     std::unordered_map<Key, uint32_t>    m_instanceLookup;
     std::vector<shader_io::InstanceInfo> m_instanceInfo;
     DXBuffer                             m_instanceInfoBuffer;
+    DXShaderResourceView                 m_instanceInfoBufferSrv;
 
     // Skybox / IBL
     DXTexture            m_skyboxTexture;
@@ -98,4 +108,14 @@ private:
     std::mutex m_textureMutex{};
 
     void LoadGltf(DXApp &state, const std::string &fileName);
+
+    // Scene walk
+    void EmitNodeInstances(
+        const fastgltf::Asset                          &asset,
+        size_t                                          nodeIndex,
+        const DirectX::XMMATRIX                        &parentTransform,
+        const std::vector<std::vector<uint32_t>>       &meshHandlesPerGltfMesh,
+        const std::vector<std::vector<int>>            &primMaterialIndicesPerGltfMesh,
+        const std::vector<uint32_t>                    &gltfMaterialToManagerHandle
+    );
 };

@@ -39,3 +39,6 @@ cmake-build-debug
 
 # scripts
 *.bat
+
+# Model assets
+Assets/Models/
