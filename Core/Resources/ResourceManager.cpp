@@ -389,13 +389,15 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
         size_t imageIndex = texture.imageIndex.value();
 
-        std::scoped_lock<std::mutex> lk{m_textureMutex};
-
-        auto pair = m_textureLookup.find(imageNames[imageIndex]);
-        Key  key{imageNames[imageIndex]};
-
-        if (pair != m_textureLookup.end()) {
-            key += "_copy";
+        // Reserve a unique key under the lock so concurrent threads see the collision; release before heavy GPU work.
+        Key key;
+        {
+            std::scoped_lock<std::mutex> lk{m_textureMutex};
+            key = imageNames[imageIndex];
+            if (m_textureLookup.contains(key)) {
+                key += "_copy";
+            }
+            m_textureLookup.emplace(key, UINT32_MAX);
         }
 
         auto width  = static_cast<uint32_t>(std::get<0>(images[imageIndex]));
@@ -420,7 +422,11 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
         };
         textureSrvs[i]            = app.CreateDXShaderResourceView(textures[i].GetResource(), desc);
         textureBindlessIndices[i] = textureSrvs[i].GetIndex();
-        m_textureLookup.emplace(key, textureBindlessIndices[i]);
+
+        {
+            std::scoped_lock<std::mutex> lk{m_textureMutex};
+            m_textureLookup[key] = textureBindlessIndices[i];
+        }
     };
 
     // D3D12 caps a single CPU-visible buffer at ~4 GB; chunk under that so each batch's shared upload heap fits.
