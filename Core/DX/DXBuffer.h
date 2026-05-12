@@ -25,7 +25,7 @@ public:
     ~DXBuffer();
 
     void Upload(uint64_t size, const void *data);
-    void UploadRows(uint32_t numRows, uint64_t srcRowPitch, uint64_t dstRowPitch, const void *data);
+    void UploadRows(uint64_t dstOffset, uint32_t numRows, uint64_t srcRowPitch, uint64_t dstRowPitch, const void *data);
 
     [[nodiscard]] ID3D12Resource *GetBuffer() const { return m_buffer.Get(); }
 

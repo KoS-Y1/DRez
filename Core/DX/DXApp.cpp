@@ -299,6 +299,35 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDescriptorHandle(int32_t index) {
     return {m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(), index, m_descriptorSize};
 }
 
+uint64_t DXApp::GetTextureUploadSize(uint64_t width, uint32_t height, DXGI_FORMAT format) const {
+    const D3D12_RESOURCE_DESC desc{
+        .Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Width            = width,
+        .Height           = height,
+        .DepthOrArraySize = 1,
+        .MipLevels        = 1,
+        .Format           = format,
+        .SampleDesc       = {.Count = 1, .Quality = 0},
+    };
+    uint64_t totalBytes{};
+    m_device->GetCopyableFootprints(&desc, 0, 1, 0, nullptr, nullptr, nullptr, &totalBytes);
+
+    // Offsets into the shared upload buffer must be D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT-aligned.
+    return (totalBytes + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) & ~uint64_t{D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1};
+}
+
+void DXApp::BeginBatchUpload(uint64_t totalBytes) {
+    m_uploadBuffer = CreateBuffer(
+        D3D12_HEAP_TYPE_UPLOAD,
+        D3D12_HEAP_FLAG_NONE,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        totalBytes,
+        "shared_upload_buffer"
+    );
+    m_uploadOffset.store(0, std::memory_order_relaxed);
+    m_pendingCopies.clear();
+}
+
 void DXApp::BatchedTextureUpload(const DXTexture &texture, const void *data) {
     const D3D12_RESOURCE_DESC desc = texture.GetResource()->GetDesc();
 
@@ -309,19 +338,16 @@ void DXApp::BatchedTextureUpload(const DXTexture &texture, const void *data) {
     uint64_t                           totalBytes{};
     m_device->GetCopyableFootprints(&desc, 0, 1, 0, &footprint, &numRows, &rowSizeInBytes, &totalBytes);
 
-    DXBuffer stagingBuffer = CreateBuffer(
-        D3D12_HEAP_TYPE_UPLOAD,
-        D3D12_HEAP_FLAG_NONE,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        totalBytes,
-        "staging_buffer" + std::string(texture.GetName())
-    );
+    // Sub-allocate from the shared heap. Reserve aligned size so every offset stays placement-aligned.
+    const uint64_t alignedSize = (totalBytes + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) & ~uint64_t{D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1};
+    const uint64_t offset      = m_uploadOffset.fetch_add(alignedSize, std::memory_order_relaxed);
+    footprint.Offset           = offset;
 
     // Source rows are tightly packed; dst rows are aligned to footprint.Footprint.RowPitch.
-    stagingBuffer.UploadRows(numRows, rowSizeInBytes, footprint.Footprint.RowPitch, data);
+    m_uploadBuffer.UploadRows(offset, numRows, rowSizeInBytes, footprint.Footprint.RowPitch, data);
 
     std::scoped_lock<std::mutex> lock(m_batchUploadMutex);
-    m_pendingCopies.emplace_back(texture.GetResource(), std::move(stagingBuffer), footprint);
+    m_pendingCopies.emplace_back(texture.GetResource(), footprint);
 }
 
 void DXApp::BatchedTextureFlush() {
@@ -342,9 +368,10 @@ void DXApp::BatchedTextureFlush() {
 
         commandList->ResourceBarrier(static_cast<uint32_t>(toCopyDest.size()), toCopyDest.data());
 
-        std::ranges::for_each(m_pendingCopies, [commandList](const PendingCopy &p) {
+        ID3D12Resource *sharedSrc = m_uploadBuffer.GetBuffer();
+        std::ranges::for_each(m_pendingCopies, [commandList, sharedSrc](const PendingCopy &p) {
             const CD3DX12_TEXTURE_COPY_LOCATION dst{p.dstResource, 0};
-            const CD3DX12_TEXTURE_COPY_LOCATION src{p.stagingBuffer.GetBuffer(), p.footprint};
+            const CD3DX12_TEXTURE_COPY_LOCATION src{sharedSrc, p.footprint};
             commandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         });
 
@@ -352,6 +379,8 @@ void DXApp::BatchedTextureFlush() {
     });
 
     m_pendingCopies.clear();
+    m_uploadBuffer = {};
+    m_uploadOffset.store(0, std::memory_order_relaxed);
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {

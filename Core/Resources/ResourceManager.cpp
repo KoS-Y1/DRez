@@ -366,55 +366,93 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
 
     ThreadPool::GetInstance().WaitIdle();
 
+    // Per-texture upload sizes (placement-aligned). Used to partition into batches that each fit in one upload heap.
+    std::vector<uint64_t> textureUploadSizes(asset->textures.size(), 0);
+    std::ranges::for_each(std::views::iota(size_t{0}, asset->textures.size()), [&](size_t i) {
+        if (!asset->textures[i].imageIndex.has_value()) {
+            return;
+        }
+        const size_t   imageIndex = asset->textures[i].imageIndex.value();
+        const uint64_t width      = static_cast<uint64_t>(std::get<0>(images[imageIndex]));
+        const uint32_t height     = static_cast<uint32_t>(std::get<1>(images[imageIndex]));
+        textureUploadSizes[i]     = app.GetTextureUploadSize(width, height, DXGI_FORMAT_R8G8B8A8_UNORM);
+    });
+
     // Load and create textures
     std::vector<DXTexture>            textures(asset->textures.size());
     std::vector<DXShaderResourceView> textureSrvs(asset->textures.size());
     std::vector<uint32_t>             textureBindlessIndices(asset->textures.size());
-    for (size_t i = 0; i < asset->textures.size(); ++i) {
-        ThreadPool::GetInstance().Enqueue([&, i]() {
-            const fastgltf::Texture &texture = asset->textures[i];
-            DebugCheckCritical(texture.imageIndex.has_value(), "{} in {} does not have an image index", texture.name, fileName);
 
-            size_t imageIndex = texture.imageIndex.value();
+    const auto stageTexture = [&](size_t i) {
+        const fastgltf::Texture &texture = asset->textures[i];
+        DebugCheckCritical(texture.imageIndex.has_value(), "{} in {} does not have an image index", texture.name, fileName);
 
-            std::scoped_lock<std::mutex> lk{m_textureMutex};
+        size_t imageIndex = texture.imageIndex.value();
 
-            auto pair = m_textureLookup.find(imageNames[imageIndex]);
-            Key  key{imageNames[imageIndex]};
+        std::scoped_lock<std::mutex> lk{m_textureMutex};
 
-            if (pair != m_textureLookup.end()) {
-                key += "_copy";
+        auto pair = m_textureLookup.find(imageNames[imageIndex]);
+        Key  key{imageNames[imageIndex]};
+
+        if (pair != m_textureLookup.end()) {
+            key += "_copy";
+        }
+
+        auto width  = static_cast<uint32_t>(std::get<0>(images[imageIndex]));
+        auto height = static_cast<uint32_t>(std::get<1>(images[imageIndex]));
+
+        textures[i] = app.CreateTexture(
+            width,
+            height,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            D3D12_RESOURCE_FLAG_NONE,
+            D3D12_HEAP_FLAG_NONE,
+            texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : shader_io::SamplerType::Nearest,
+            key
+        );
+        app.BatchedTextureUpload(textures[i], std::get<2>(images[imageIndex]));
+
+        const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+            .Format                  = textures[i].GetFormat(),
+            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D               = {.MipLevels = 1},
+        };
+        textureSrvs[i]            = app.CreateDXShaderResourceView(textures[i].GetResource(), desc);
+        textureBindlessIndices[i] = textureSrvs[i].GetIndex();
+        m_textureLookup.emplace(key, textureBindlessIndices[i]);
+    };
+
+    // D3D12 caps a single CPU-visible buffer at ~4 GB; chunk under that so each batch's shared upload heap fits.
+    constexpr uint64_t kMaxBatchBytes = 2ULL * 1024 * 1024 * 1024;
+
+    size_t batchStart = 0;
+    while (batchStart < asset->textures.size()) {
+        size_t   batchEnd   = batchStart;
+        uint64_t batchBytes = 0;
+        while (batchEnd < asset->textures.size()) {
+            const uint64_t next = batchBytes + textureUploadSizes[batchEnd];
+            if (next > kMaxBatchBytes && batchBytes > 0) {
+                break;
             }
+            batchBytes = next;
+            ++batchEnd;
+        }
 
-            auto width  = static_cast<uint32_t>(std::get<0>(images[imageIndex]));
-            auto height = static_cast<uint32_t>(std::get<1>(images[imageIndex]));
-
-            textures[i] = app.CreateTexture(
-                width,
-                height,
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                D3D12_RESOURCE_FLAG_NONE,
-                D3D12_HEAP_FLAG_NONE,
-                texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : shader_io::SamplerType::Nearest,
-                key
-            );
-            app.BatchedTextureUpload(textures[i], std::get<2>(images[imageIndex]));
-
-            const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
-                .Format                  = textures[i].GetFormat(),
-                .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
-                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-                .Texture2D               = {.MipLevels = 1},
-            };
-            textureSrvs[i]            = app.CreateDXShaderResourceView(textures[i].GetResource(), desc);
-            textureBindlessIndices[i] = textureSrvs[i].GetIndex();
-            m_textureLookup.emplace(key, textureBindlessIndices[i]);
-
+        if (batchBytes > 0) {
+            app.BeginBatchUpload(batchBytes);
+        }
+        std::ranges::for_each(std::views::iota(batchStart, batchEnd), [&](size_t i) {
+            ThreadPool::GetInstance().Enqueue([&, i]() { stageTexture(i); });
         });
+        ThreadPool::GetInstance().WaitIdle();
+        if (batchBytes > 0) {
+            app.BatchedTextureFlush();
+        }
+
+        batchStart = batchEnd;
     }
 
-    ThreadPool::GetInstance().WaitIdle();
-    app.BatchedTextureFlush();
     m_textures.insert(m_textures.end(), std::make_move_iterator(textures.begin()), std::make_move_iterator(textures.end()));
     m_textureSrvs.insert(m_textureSrvs.end(), std::make_move_iterator(textureSrvs.begin()), std::make_move_iterator(textureSrvs.end()));
 

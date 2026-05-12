@@ -39,8 +39,8 @@ void DXBuffer::Upload(uint64_t size, const void *data) {
     memcpy(m_mappedData, data, size);
 }
 
-void DXBuffer::UploadRows(uint32_t numRows, uint64_t srcRowPitch, uint64_t dstRowPitch, const void *data) {
-    auto       *dst = static_cast<uint8_t *>(m_mappedData);
+void DXBuffer::UploadRows(uint64_t dstOffset, uint32_t numRows, uint64_t srcRowPitch, uint64_t dstRowPitch, const void *data) {
+    auto       *dst = static_cast<uint8_t *>(m_mappedData) + dstOffset;
     const auto *src = static_cast<const uint8_t *>(data);
     for (uint32_t row = 0; row < numRows; ++row) {
         memcpy(dst + dstRowPitch * row, src + srcRowPitch * row, srcRowPitch);

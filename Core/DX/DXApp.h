@@ -120,8 +120,10 @@ public:
 
 public:
     // Batch upload texture
-    void BatchedTextureUpload(const DXTexture &texture, const void *data);
-    void BatchedTextureFlush();
+    void                       BeginBatchUpload(uint64_t totalBytes);
+    void                       BatchedTextureUpload(const DXTexture &texture, const void *data);
+    void                       BatchedTextureFlush();
+    [[nodiscard]] uint64_t     GetTextureUploadSize(uint64_t width, uint32_t height, DXGI_FORMAT format) const;
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
@@ -182,10 +184,11 @@ private:
     // Batch upload
     struct PendingCopy {
         ID3D12Resource                    *dstResource{};
-        DXBuffer                           stagingBuffer{};
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     };
 
+    DXBuffer                 m_uploadBuffer{};
+    std::atomic<uint64_t>    m_uploadOffset{0};
     std::mutex               m_batchUploadMutex{};
     std::vector<PendingCopy> m_pendingCopies{};
 };
