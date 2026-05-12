@@ -87,15 +87,13 @@ public:
         uint64_t               width,
         uint32_t               height,
         DXGI_FORMAT            format,
-        uint32_t               formatSize,
         D3D12_RESOURCE_FLAGS   resourceFlags,
         D3D12_HEAP_FLAGS       heapFlags,
         shader_io::SamplerType samplerType,
-        const void            *data,
         std::string            name,
         DXGI_FORMAT            clearFormat = DXGI_FORMAT_UNKNOWN
     ) {
-        return DXTexture{*this, width, height, format, formatSize, resourceFlags, heapFlags, samplerType, data, name, clearFormat};
+        return DXTexture{*this, width, height, format, resourceFlags, heapFlags, samplerType, name, clearFormat};
     }
 
     [[nodiscard]] DXShaderResourceView CreateDXShaderResourceView(ID3D12Resource *resource, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc) {
@@ -122,8 +120,8 @@ public:
 
 public:
     // Batch upload texture
-    void BatchedTextureUpload(const DXTexture &texture, const void *data, uint32_t formatSize);
-    void BatchedTextureFlash();
+    void BatchedTextureUpload(const DXTexture &texture, const void *data);
+    void BatchedTextureFlush();
 
 private:
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};

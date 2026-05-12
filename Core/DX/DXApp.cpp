@@ -4,6 +4,8 @@
 
 #include "DXApp.h"
 
+#include <algorithm>
+#include <ranges>
 #include <string>
 
 #include <directx/d3dx12.h>
@@ -297,34 +299,59 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE DXApp::GetDescriptorHandle(int32_t index) {
     return {m_descriptorHeap->GetCPUDescriptorHandleForHeapStart(), index, m_descriptorSize};
 }
 
-void DXApp::BatchedTextureUpload(const DXTexture &texture, const void *data, uint32_t formatSize) {
-    uint64_t width  = texture.GetWidth();
-    uint32_t height = texture.GetHeight();
+void DXApp::BatchedTextureUpload(const DXTexture &texture, const void *data) {
+    const D3D12_RESOURCE_DESC desc = texture.GetResource()->GetDesc();
+
+    // GPU-required layout: row pitch aligned to D3D12_TEXTURE_DATA_PITCH_ALIGNMENT (256).
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    uint32_t                           numRows{};
+    uint64_t                           rowSizeInBytes{};
+    uint64_t                           totalBytes{};
+    m_device->GetCopyableFootprints(&desc, 0, 1, 0, &footprint, &numRows, &rowSizeInBytes, &totalBytes);
 
     DXBuffer stagingBuffer = CreateBuffer(
         D3D12_HEAP_TYPE_UPLOAD,
         D3D12_HEAP_FLAG_NONE,
         D3D12_RESOURCE_STATE_GENERIC_READ,
-        width * height * formatSize,
+        totalBytes,
         "staging_buffer" + std::string(texture.GetName())
     );
 
-    D3D12_SUBRESOURCE_FOOTPRINT subFootprint{
-        .Format   = texture.GetFormat(),
-        .Width    = static_cast<uint32_t>(width),
-        .Height   = height,
-        .Depth    = 1,
-        .RowPitch = formatSize * static_cast<uint32_t>(width)
-    };
+    // Source rows are tightly packed; dst rows are aligned to footprint.Footprint.RowPitch.
+    stagingBuffer.UploadRows(numRows, rowSizeInBytes, footprint.Footprint.RowPitch, data);
 
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{.Offset = 0, .Footprint = subFootprint};
-
-    std::lock_guard<std::mutex> lock(m_batchUploadMutex);
-    m_pendingCopies.emplace_back(texture.GetResource(), std::move(stagingBuffer), std::move(footprint));
+    std::scoped_lock<std::mutex> lock(m_batchUploadMutex);
+    m_pendingCopies.emplace_back(texture.GetResource(), std::move(stagingBuffer), footprint);
 }
 
-void DXApp::BatchedTextureFlash() {
-    // TODO: flush
+void DXApp::BatchedTextureFlush() {
+    if (m_pendingCopies.empty()) {
+        return;
+    }
+
+    ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+        std::vector<CD3DX12_RESOURCE_BARRIER> toCopyDest(m_pendingCopies.size());
+        std::vector<CD3DX12_RESOURCE_BARRIER> toShaderResource(m_pendingCopies.size());
+
+        std::ranges::transform(m_pendingCopies, toCopyDest.begin(), [](const PendingCopy &p) {
+            return CD3DX12_RESOURCE_BARRIER::Transition(p.dstResource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+        });
+        std::ranges::transform(m_pendingCopies, toShaderResource.begin(), [](const PendingCopy &p) {
+            return CD3DX12_RESOURCE_BARRIER::Transition(p.dstResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        });
+
+        commandList->ResourceBarrier(static_cast<uint32_t>(toCopyDest.size()), toCopyDest.data());
+
+        std::ranges::for_each(m_pendingCopies, [commandList](const PendingCopy &p) {
+            const CD3DX12_TEXTURE_COPY_LOCATION dst{p.dstResource, 0};
+            const CD3DX12_TEXTURE_COPY_LOCATION src{p.stagingBuffer.GetBuffer(), p.footprint};
+            commandList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        });
+
+        commandList->ResourceBarrier(static_cast<uint32_t>(toShaderResource.size()), toShaderResource.data());
+    });
+
+    m_pendingCopies.clear();
 }
 
 void DXApp::ResetCommand(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList) {

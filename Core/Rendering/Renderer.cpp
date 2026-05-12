@@ -89,11 +89,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 m_width,
                 m_height,
                 kGbufferFormat,
-                drez::dx_utils::GetFormatSize(kGbufferFormat),
                 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
                 D3D12_HEAP_FLAG_NONE,
                 shader_io::SamplerType::Nearest,
-                nullptr,
                 name
             );
             m_app.CreateRenderTargetView(texture.GetResource(), rtvOffset);
@@ -120,11 +118,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             m_width,
             m_height,
             DXGI_FORMAT_D32_FLOAT,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_D32_FLOAT),
             D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Nearest,
-            nullptr,
             "depth_texture"
         );
         m_app.CreateDepthStencilView(m_depthTexture.GetResource(), dsvOffset);
@@ -141,11 +137,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             kShadowMapSize,
             kShadowMapSize,
             DXGI_FORMAT_R32_TYPELESS,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R32_TYPELESS),
             D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Linear,
-            nullptr,
             "shadow_map_texture",
             DXGI_FORMAT_D32_FLOAT
         );
@@ -180,11 +174,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             m_width,
             m_height,
             DXGI_FORMAT_R16G16B16A16_FLOAT,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R16G16B16A16_FLOAT),
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Linear,
-            nullptr,
             "deferred_texture"
         );
         const D3D12_SHADER_RESOURCE_VIEW_DESC deferredSrvDesc{
@@ -217,11 +209,9 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             m_width,
             m_height,
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
             D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Nearest,
-            nullptr,
             "composed_texture"
         );
         const D3D12_UNORDERED_ACCESS_VIEW_DESC composedUavDesc{

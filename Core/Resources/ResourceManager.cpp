@@ -44,13 +44,12 @@ void ResourceManager::Init(DXApp &app) {
                 width,
                 height,
                 DXGI_FORMAT_R8G8B8A8_UNORM,
-                drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
                 D3D12_RESOURCE_FLAG_NONE,
                 D3D12_HEAP_FLAG_NONE,
                 shader_io::SamplerType::Nearest,
-                std::get<2>(imageData.value()),
                 key
             );
+            texture.Upload(app, std::get<2>(imageData.value()));
 
             const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
                 .Format                  = texture.GetFormat(),
@@ -394,13 +393,12 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
                 width,
                 height,
                 DXGI_FORMAT_R8G8B8A8_UNORM,
-                drez::dx_utils::GetFormatSize(DXGI_FORMAT_R8G8B8A8_UNORM),
                 D3D12_RESOURCE_FLAG_NONE,
                 D3D12_HEAP_FLAG_NONE,
                 texture.samplerIndex.has_value() ? infoSamplers[texture.samplerIndex.value()] : shader_io::SamplerType::Nearest,
-                std::get<2>(images[imageIndex]),
                 key
             );
+            app.BatchedTextureUpload(textures[i], std::get<2>(images[imageIndex]));
 
             const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
                 .Format                  = textures[i].GetFormat(),
@@ -416,6 +414,7 @@ void ResourceManager::LoadGltf(DXApp &app, const std::string &fileName) {
     }
 
     ThreadPool::GetInstance().WaitIdle();
+    app.BatchedTextureFlush();
     m_textures.insert(m_textures.end(), std::make_move_iterator(textures.begin()), std::make_move_iterator(textures.end()));
     m_textureSrvs.insert(m_textureSrvs.end(), std::make_move_iterator(textureSrvs.begin()), std::make_move_iterator(textureSrvs.end()));
 
