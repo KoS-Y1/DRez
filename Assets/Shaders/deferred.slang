@@ -73,12 +73,8 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     const float4 lightSpacePos = mul(float4(worldPos, 1.0f), pushConstants.lightSpaceMatrix);
     const float shadow = CalculateShadow(lightSpacePos, L, N, shadowMap, gShadow);
 
-    // const float3 color = ibl + emissive + brdf * shadow;
-    const float3 color = ibl + emissive + brdf;
+    const float3 color = ibl + emissive + brdf * shadow;
+    // const float3 color = lightSpacePos.xyz * shadow;
 
-    const uint id = uint(sample0.w);
-    const float3 dbg =
-        float3(frac(float(id) * 0.61803398f), frac(float(id) * 0.41421356f), frac(float(id) * 0.31830988f));
-    dst[px] = float4(dbg, 1.0f);
-    // dst[px] = float4(color, 1.0f);
+    dst[px] = float4(color, 1.0f);
 }

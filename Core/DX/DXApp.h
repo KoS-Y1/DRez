@@ -11,6 +11,7 @@
 
 #include <directx/d3d12.h>
 #include <dxgi1_4.h>
+#include <imgui_impl_dx12.h>
 #include <wrl/client.h>
 
 #include "DXBuffer.h"
@@ -23,6 +24,8 @@
 #include <directx/d3dx12_root_signature.h>
 #include <vector>
 
+class SDL_Window;
+
 struct FrameInfo {
     ID3D12GraphicsCommandList *commandList;
     const uint32_t             frameIndex;
@@ -32,10 +35,9 @@ class DXApp {
 public:
     static constexpr uint32_t kMaxFramesInFlight{2};
 
-
 public:
     DXApp() = delete;
-    explicit DXApp(HWND hwnd);
+    explicit DXApp(SDL_Window *window);
 
     DXApp(const DXApp &)            = delete;
     DXApp &operator=(const DXApp &) = delete;
@@ -66,7 +68,6 @@ public:
     [[nodiscard]] uint32_t GetWindowHeight() const { return m_height; }
 
     [[nodiscard]] ID3D12Device *GetDevice() const { return m_device.Get(); }
-
 
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
@@ -129,11 +130,13 @@ public:
     void GenerateMipmaps(DXTexture &texture, uint32_t srcSrvIndex);
 
 private:
-    static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
     static constexpr uint64_t    kPointOneSecond{100000000};
+    static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
+    static constexpr DXGI_FORMAT kDepthFormat{DXGI_FORMAT_R32_FLOAT};
 
-    uint32_t m_width{};
-    uint32_t m_height{};
+    SDL_Window *m_window{};
+    uint32_t    m_width{};
+    uint32_t    m_height{};
 
     Microsoft::WRL::ComPtr<ID3D12Device>                                              m_device{};
     Microsoft::WRL::ComPtr<ID3D12CommandQueue>                                        m_commandQueue{};
@@ -167,6 +170,19 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_descriptorHeap{};
     uint32_t                                     m_descriptorSize{};
     std::atomic<uint32_t>                        m_nextBindlessIndex{0};
+
+    struct ImGuiHeap {
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap{};
+        uint32_t                                     descriptorSize{};
+        std::vector<int32_t>                         freeIndices{};
+        D3D12_CPU_DESCRIPTOR_HANDLE                  startCpu;
+        D3D12_GPU_DESCRIPTOR_HANDLE                  startGpu;
+
+        void Allocate(ImGui_ImplDX12_InitInfo *, D3D12_CPU_DESCRIPTOR_HANDLE *cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE *gpuHandle);
+        void Free(ImGui_ImplDX12_InitInfo *, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle);
+    };
+
+    ImGuiHeap m_imguiHeap{};
 
     bool m_resourcesBound{false};
 

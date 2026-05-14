@@ -16,7 +16,11 @@
     "version>=" : "1.17.0"
   }, {
     "name" : "imgui",
-    "version>=" : "1.92.7"
+    "version>=" : "1.92.7",
+    "features": [
+      "sdl3-binding",
+      "dx12-binding"
+    ]
   }, {
     "name" : "directx-headers",
     "version>=" : "1.619.1"

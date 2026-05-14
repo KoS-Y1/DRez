@@ -28,6 +28,7 @@ target_link_libraries(DX PUBLIC
         d3d12
         dxgi
         dxguid
+        imgui::imgui
         Microsoft::DirectXMath
         Debug
         Files
@@ -41,6 +42,7 @@ add_library(Window
 target_include_directories(Window PUBLIC Window)
 target_link_libraries(Window PUBLIC
         SDL3::SDL3
+        imgui::imgui
         Debug
         DX
         Rendering

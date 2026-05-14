@@ -199,11 +199,6 @@ void ResourceManager::Init(DXApp &app) {
         m_instanceInfoBufferSrv = app.CreateDXShaderResourceView(m_instanceInfoBuffer.GetBuffer(), desc);
     }
 
-    for (uint32_t i = 0; i < ResourceManager::GetInstance().GetInstanceCount(); ++i) {
-        const auto &info = ResourceManager::GetInstance().GetInstanceInfo(i);
-        const auto &mesh = ResourceManager::GetInstance().GetMesh(info.meshHandle);
-        DebugInfo("instance[{}] mesh='{}' materialHandle={}", i, mesh.GetName(), info.materialHandle);
-    }
 }
 
 uint32_t ResourceManager::GetMeshHandle(const Key &key) const {

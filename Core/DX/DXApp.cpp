@@ -11,13 +11,31 @@
 #include <directx/d3dx12.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <imgui.h>
+#include <imgui_impl_dx12.h>
+#include <imgui_impl_sdl3.h>
 
 #include "Debug.h"
 #include "global_io.slang"
 
+#include <SDL3/SDL_properties.h>
+#include <SDL3/SDL_video.h>
+#include <numeric>
+
 using Microsoft::WRL::ComPtr;
 
-DXApp::DXApp(HWND hwnd) {
+namespace {
+HWND GetHWND(SDL_Window *window) {
+    SDL_PropertiesID properties = SDL_GetWindowProperties(window);
+    HWND             hwnd       = static_cast<HWND>(SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+
+    DebugCheckCritical(hwnd != nullptr, "Failed to get window handle");
+    return hwnd;
+}
+} // namespace
+
+DXApp::DXApp(SDL_Window *window)
+    : m_window(window) {
 #if defined(_DEBUG)
     // Enable debug layer
     {
@@ -142,6 +160,7 @@ DXApp::DXApp(HWND hwnd) {
         DebugCheckCritical(m_fenceEvent, "Failed to create fence, error 0x{:x}", static_cast<uint32_t>(HRESULT_FROM_WIN32(GetLastError())));
     }
 
+    HWND hwnd = GetHWND(m_window);
     // Get window extent
     {
         RECT rect;
@@ -199,6 +218,16 @@ DXApp::DXApp(HWND hwnd) {
         result              = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_descriptorHeap));
         DebugCheckCritical(SUCCEEDED(result), "Failed to create descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
         m_descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        desc.NumDescriptors = 64;
+        result              = m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_imguiHeap.heap));
+        DebugCheckCritical(SUCCEEDED(result), "Failed to create ImGui Descriptor heap, error 0x{:x}", static_cast<uint32_t>(result));
+        m_imguiHeap.descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        m_imguiHeap.freeIndices.resize(64);
+        std::iota(m_imguiHeap.freeIndices.begin(), m_imguiHeap.freeIndices.end(), 0u);
+        std::reverse(m_imguiHeap.freeIndices.begin(), m_imguiHeap.freeIndices.end());
+        m_imguiHeap.startCpu = m_imguiHeap.heap->GetCPUDescriptorHandleForHeapStart();
+        m_imguiHeap.startGpu = m_imguiHeap.heap->GetGPUDescriptorHandleForHeapStart();
     }
 
     // Swapchain images
@@ -211,9 +240,33 @@ DXApp::DXApp(HWND hwnd) {
 
     // Mipmap generation pipeline
     m_mipmapPipeline = CreateComputePipeline("../Assets/Shaders/mipmap.json");
+
+    // ImGui
+    {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO &io     = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+        ImGui_ImplSDL3_InitForD3D(m_window);
+
+        ImGui_ImplDX12_InitInfo dx12InitInfo{
+            .Device               = m_device.Get(),
+            .CommandQueue         = m_commandQueue.Get(),
+            .NumFramesInFligt     = kMaxFramesInFlight,
+            .RTVFormat            = kPresentFormat,
+            .DepthFormat          = kDepthFormat,
+            .SrvDescriptorAllocFn = &m_imguiHeap.Allocate,
+            .SrvDescriptorFreeFn  = &m_imguiHeap.Free,
+        };
+        ImGui_ImplDX12_Init(&dx12InitInfo);
+    }
 }
 
 DXApp::~DXApp() {
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+
     WaitForFence(SignalQueue());
     CloseHandle(m_fenceEvent);
 }
@@ -400,19 +453,18 @@ void DXApp::GenerateMipmaps(DXTexture &texture, uint32_t srcSrvIndex) {
         // Initial barriers: mip 0 → sample state, mips 1..N-1 → UAV
         std::vector<CD3DX12_RESOURCE_BARRIER> initBarriers;
         initBarriers.reserve(mipLevels);
-        initBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-            texture.GetResource(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            0
-        ));
-        std::ranges::for_each(std::views::iota(uint16_t{1}, mipLevels), [&](uint16_t m) {
-            initBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
+        initBarriers.push_back(
+            CD3DX12_RESOURCE_BARRIER::Transition(
                 texture.GetResource(),
                 D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                m
-            ));
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                0
+            )
+        );
+        std::ranges::for_each(std::views::iota(uint16_t{1}, mipLevels), [&](uint16_t m) {
+            initBarriers.push_back(
+                CD3DX12_RESOURCE_BARRIER::Transition(texture.GetResource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, m)
+            );
         });
         commandList->ResourceBarrier(static_cast<uint32_t>(initBarriers.size()), initBarriers.data());
 
@@ -450,12 +502,14 @@ void DXApp::GenerateMipmaps(DXTexture &texture, uint32_t srcSrvIndex) {
         std::vector<CD3DX12_RESOURCE_BARRIER> finalBarriers;
         finalBarriers.reserve(mipLevels);
         std::ranges::for_each(std::views::iota(uint16_t{0}, mipLevels), [&](uint16_t m) {
-            finalBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-                texture.GetResource(),
-                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                m
-            ));
+            finalBarriers.push_back(
+                CD3DX12_RESOURCE_BARRIER::Transition(
+                    texture.GetResource(),
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                    m
+                )
+            );
         });
         commandList->ResourceBarrier(static_cast<uint32_t>(finalBarriers.size()), finalBarriers.data());
     });
@@ -486,8 +540,6 @@ void DXApp::SubmitToQueue(ID3D12GraphicsCommandList *commandList) {
 
 void DXApp::AcquireNextFrame() {
     m_backBufferIndex = m_swapchain->GetCurrentBackBufferIndex();
-
-    // TODO: check widow size changes and resize render target
 }
 
 void DXApp::WaitForFence(uint64_t fenceValue, uint64_t timeout) {
@@ -496,4 +548,19 @@ void DXApp::WaitForFence(uint64_t fenceValue, uint64_t timeout) {
 
         WaitForSingleObject(m_fenceEvent, timeout);
     }
+}
+
+void DXApp::ImGuiHeap::Allocate(ImGui_ImplDX12_InitInfo *, D3D12_CPU_DESCRIPTOR_HANDLE *cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE *gpuHandle) {
+    DebugCheckCritical(freeIndices.size() > 0, "ImGui descriptor heap does not have free index");
+    int32_t idx = freeIndices.back();
+    freeIndices.pop_back();
+    cpuHandle->ptr = startCpu.ptr + idx * descriptorSize;
+    gpuHandle->ptr = startGpu.ptr + idx * descriptorSize;
+}
+
+void DXApp::ImGuiHeap::Free(ImGui_ImplDX12_InitInfo *, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle) {
+    int32_t cpuIdx = static_cast<int32_t>((cpuHandle.ptr - startCpu.ptr) / descriptorSize);
+    int32_t gpuIdx = static_cast<int32_t>(gpuHandle.ptr - startGpu.ptr) / descriptorSize;
+    DebugCheckCritical(cpuIdx == gpuIdx, "Imgui descriptor heap CPU and GPU indices do not match when freeing");
+    freeIndices.push_back(cpuIdx);
 }

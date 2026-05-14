@@ -230,19 +230,22 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     // Skybox
     {
         const std::vector<VertexP> skyboxVertices{
+            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, 1.0f)},
             VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, 1.0f)},
-            VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, 1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f)},
             VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, -1.0f)},
             VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f)},
-            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f)},
-            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, 1.0f)},
-            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f)},
+            VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, 1.0f)},
             VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, 1.0f)},
-            VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, -1.0f)},
             VertexP{DirectX::XMFLOAT3(1.0f, -1.0f, -1.0f)},
-            VertexP{DirectX::XMFLOAT3(-1.0f, 1.0f, -1.0f)},
-            VertexP{DirectX::XMFLOAT3(1.0f, 1.0f, -1.0f)}
+            VertexP{DirectX::XMFLOAT3(-1.0f, -1.0f, -1.0f)}
         };
+
         const uint64_t size = std::span<const VertexP>{skyboxVertices}.size_bytes();
 
         m_skyboxVertexBuffer =

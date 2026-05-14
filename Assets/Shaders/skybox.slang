@@ -33,6 +33,5 @@ float4 fragmentMain(VSOut input) : SV_Target0
 
     float2 uv = SampleSphericalMap(normalize(input.worldPos));
     uv.y = -uv.y;
-    // return float4(1.0f, 0.0f, 0.0f, 1.0f);
     return RgbmToLinear(skybox.SampleLevel(gLinear, uv, 0));
 }

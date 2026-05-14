@@ -41,18 +41,7 @@ public float CalculateShadow(const float4 lightSpacePos, const float3 L, const f
 
     // Slope scaled bias
     const float NdotL = saturate(dot(normalize(worldNormal), normalize(L)));
-    const float bias = max(0.0003f * (1 - NdotL), 0.0007f);
+    const float bias = max(0.0001f * (1 - NdotL), 0.0007f);
 
     return PCF(uv, projCoords.z - bias, shadowMap, shadowSampler);
-}
-
-public float3 GetShadowRayDir(const float3 worldPos, const float3 lightDir, const float2 randomSample, const float lightRadius) {
-    const float pointRadius = lightRadius * sqrt(randomSample.x);
-    const float pointAngle = randomSample.y * 2.0f * PI;
-
-    const float2 diskPoint = float2(pointRadius * cos(pointAngle), pointRadius * sin(pointAngle));
-    const float3 lightTangent = normalize(cross(lightDir, kWorldUp));
-    const float3 lightBitangent = normalize(cross(lightTangent, lightDir));
-
-    return normalize(lightDir + diskPoint.x * lightTangent + diskPoint.y * lightBitangent);
 }

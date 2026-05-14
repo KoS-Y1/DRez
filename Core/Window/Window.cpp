@@ -4,14 +4,16 @@
 
 #include "Window.h"
 
-#include <SDL3/SDL.h>
-
 #include <unordered_map>
+
+#include <SDL3/SDL.h>
 
 #include "Camera.h"
 #include "DXApp.h"
 #include "Debug.h"
 #include "Renderer.h"
+
+#include <imgui_impl_sdl3.h>
 
 namespace {
 constexpr int kMaxWindowWidth{2040};
@@ -31,7 +33,7 @@ Window::Window()
     m_window = SDL_CreateWindow("DRez", m_width, m_height, SDL_WINDOW_HIGH_PIXEL_DENSITY);
     DebugCheckCritical(m_window != nullptr, "Failed to create window");
 
-    m_dxApp = std::make_unique<DXApp>(GetHWND());
+    m_dxApp = std::make_unique<DXApp>(m_window);
 }
 
 Window::~Window() {
@@ -50,8 +52,8 @@ void Window::Run() {
             {SDL_SCANCODE_S, kBackward},
             {SDL_SCANCODE_D, kRight   },
             {SDL_SCANCODE_A, kLeft    },
-            {SDL_SCANCODE_Q, kDown      },
-            {SDL_SCANCODE_E, kUp    },
+            {SDL_SCANCODE_Q, kDown    },
+            {SDL_SCANCODE_E, kUp      },
         };
 
         // Camera movement
@@ -70,13 +72,14 @@ void Window::Run() {
                 camera.ProcessRotation(offset);
             }
         }
-
     };
 
     m_running = true;
     while (m_running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL3_ProcessEvent(&event);
+
             switch (event.type) {
             case SDL_EVENT_QUIT:
                 m_running = false;
@@ -91,12 +94,4 @@ void Window::Run() {
     }
 
     DebugInfo("SDL_Window quitting");
-}
-
-HWND Window::GetHWND() const {
-    SDL_PropertiesID properties = SDL_GetWindowProperties(m_window);
-    HWND             hwnd       = static_cast<HWND>(SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
-
-    DebugCheckCritical(hwnd != nullptr, "Failed to get window handle");
-    return hwnd;
 }
