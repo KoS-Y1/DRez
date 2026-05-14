@@ -17,6 +17,7 @@
 #include "DXGraphicsPipeline.h"
 #include "DXShaderResourceView.h"
 #include "DXTexture.h"
+#include "DXTimestamps.h"
 #include "DXUnorderedAccessView.h"
 
 #include "global_io.slang"
@@ -56,6 +57,7 @@ private:
     DXComputePipeline  m_blit{};
 
     void Update(const FrameInfo &frameInfo);
+    void BuildImGuiContent();
 
 private:
     // Resources
@@ -69,6 +71,7 @@ private:
 
     DXTexture             m_composedTexture{};
     DXUnorderedAccessView m_composedTextureUav{};
+    int32_t               m_composedTextureRtvOffset{};
 
     DXTexture m_depthTexture{};
     int32_t   m_depthTextureDsvOffset{};
@@ -94,4 +97,14 @@ private:
     // Deferred bindless info buffer
     DXBuffer             m_deferredInfoBuffer{};
     DXShaderResourceView m_deferredInfoBufferSrv{};
+
+    // GPU timing
+    DXTimestamps m_timestamps{};
+
+    // Frame timing history
+    static constexpr uint32_t            kFrameHistorySize{120};
+    std::array<float, kFrameHistorySize> m_frameTimeHistory{};
+    uint32_t                             m_frameTimeHistoryOffset{};
+    float                                m_lastFrameTimeMs{};
+    int64_t                              m_lastFrameTickCount{};
 };

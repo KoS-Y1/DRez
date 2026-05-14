@@ -21,6 +21,8 @@ add_library(DX
         DX/DXComputePipeline.h
         DX/DXDebug.cpp
         DX/DXDebug.h
+        DX/DXTimestamps.cpp
+        DX/DXTimestamps.h
 )
 target_include_directories(DX PUBLIC DX)
 target_link_libraries(DX PUBLIC

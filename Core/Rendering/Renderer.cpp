@@ -5,10 +5,14 @@
 #include "Renderer.h"
 
 #include <algorithm>
+#include <chrono>
 #include <ranges>
 
 #include <directx/d3dx12_barriers.h>
 #include <directx/d3dx12_resource_helpers.h>
+#include <imgui.h>
+#include <imgui_impl_dx12.h>
+#include <imgui_impl_sdl3.h>
 
 #include "DXDebug.h"
 #include "DXUtils.h"
@@ -17,16 +21,18 @@
 #include "VertexFormats.h"
 
 namespace {
-// Fixed directional light shared by the shadow and deferred passes
-constexpr DirectX::XMFLOAT3 kLightDir{0.3f, 1.0f, 0.5f};
-constexpr DirectX::XMFLOAT3 kLightColor{0.9f, 0.50f, 0.2f};
-constexpr float             kLightIntensity{3.0f};
+// Initial directional light shared by the shadow and deferred passes
+constexpr DirectX::XMFLOAT3 kInitialLightDir{0.3f, 1.0f, 0.5f};
+constexpr DirectX::XMFLOAT3 kInitialLightColor{0.9f, 0.50f, 0.2f};
+constexpr float             kInitialLightIntensity{3.0f};
 
 // Orthographic frustum the shadow map covers, in world units, centered on origin
 constexpr float kShadowOrthoSize{20.0f};
 constexpr float kShadowNear{0.1f};
 constexpr float kShadowFar{100.0f};
 constexpr float kLightDistance{10.0f};
+
+constexpr uint32_t kMaxTimestampPasses{8};
 } // namespace
 
 Renderer::Renderer(DXApp &app, const Camera &camera)
@@ -47,18 +53,8 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         m_blit     = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
     }
 
-    // Light-space matrix
-    {
-        using namespace DirectX;
-        const XMVECTOR L             = XMVector3Normalize(XMLoadFloat3(&kLightDir));
-        const XMVECTOR sceneCenter   = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-        const XMVECTOR lightPos      = XMVectorAdd(sceneCenter, XMVectorScale(L, kLightDistance));
-        const XMVECTOR worldUp       = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-        const XMMATRIX lightView     = XMMatrixLookAtRH(lightPos, sceneCenter, worldUp);
-        const XMMATRIX lightProj     = XMMatrixOrthographicRH(kShadowOrthoSize, kShadowOrthoSize, kShadowNear, kShadowFar);
-        const XMMATRIX lightViewProj = XMMatrixMultiply(lightView, lightProj);
-        XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
-    }
+    // GPU timing
+    m_timestamps = DXTimestamps{m_app, kMaxTimestampPasses};
 
     // Rendering resource
     {
@@ -209,7 +205,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             m_width,
             m_height,
             DXGI_FORMAT_R8G8B8A8_UNORM,
-            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Nearest,
             "composed_texture"
@@ -220,6 +216,8 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             .Texture2D     = {.MipSlice = 0, .PlaneSlice = 0},
         };
         m_composedTextureUav = m_app.CreateDXUnorderedAccessView(m_composedTexture.GetResource(), composedUavDesc);
+        m_app.CreateRenderTargetView(m_composedTexture.GetResource(), rtvOffset);
+        m_composedTextureRtvOffset = rtvOffset++;
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             auto barrier =
                 CD3DX12_RESOURCE_BARRIER::Transition(m_composedTexture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -332,12 +330,11 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         });
 
-        m_deferredUniforms.lightSpaceMatrix  = m_lightSpaceMatrix;
         m_deferredUniforms.deferredInfoIndex = m_deferredInfoBufferSrv.GetIndex();
         m_deferredUniforms.dstIndex          = m_deferredTextureUav.GetIndex();
-        m_deferredUniforms.lightDir          = kLightDir;
-        m_deferredUniforms.lightColor        = kLightColor;
-        m_deferredUniforms.lightIntensity    = kLightIntensity;
+        m_deferredUniforms.lightDir          = kInitialLightDir;
+        m_deferredUniforms.lightColor        = kInitialLightColor;
+        m_deferredUniforms.lightIntensity    = kInitialLightIntensity;
 
         m_skyboxUniforms.skyboxIndex = ResourceManager::GetInstance().GetSkyboxBindlessIndex();
 
@@ -352,11 +349,20 @@ void Renderer::Render() {
     ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
     uint32_t                   frameIndex  = frameInfo.frameIndex;
 
+    m_timestamps.BeginFrame(frameIndex);
+
+    // ImGui new frame
+    ImGui_ImplDX12_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+    BuildImGuiContent();
+
     Update(frameInfo);
 
     // Shadow pass
     {
         drez::dx::debug::ScopedEvent passScope{commandList, "Shadow pass"};
+        m_timestamps.BeginPass(commandList, "Shadow");
 
         commandList->SetGraphicsRootSignature(m_shadow.GetRootSignature());
         commandList->SetPipelineState(m_shadow.GetPipelineState());
@@ -395,11 +401,13 @@ void Renderer::Render() {
             D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
         );
         commandList->ResourceBarrier(1, &readBarrier);
+        m_timestamps.EndPass(commandList);
     }
 
     // Gbuffer pass
     {
         drez::dx::debug::ScopedEvent passScope{commandList, "Gbuffer pass"};
+        m_timestamps.BeginPass(commandList, "Gbuffer");
 
         commandList->SetGraphicsRootSignature(m_gbuffer.GetRootSignature());
         commandList->SetPipelineState(m_gbuffer.GetPipelineState());
@@ -444,11 +452,13 @@ void Renderer::Render() {
             commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
             commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
         });
+        m_timestamps.EndPass(commandList);
     }
 
     // Deferred pass
     {
         drez::dx::debug::ScopedEvent passScope{commandList, "Deferred pass"};
+        m_timestamps.BeginPass(commandList, "Deferred");
 
         std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
         barriers.reserve(m_gbufferTextures.size() + 1);
@@ -479,11 +489,13 @@ void Renderer::Render() {
             static_cast<uint32_t>(std::ceil(m_height / shader_io::kDeferredThreadY)),
             1
         );
+        m_timestamps.EndPass(commandList);
     }
 
     // Skybox pass
     {
         drez::dx::debug::ScopedEvent passScope{commandList, "Skybox pass"};
+        m_timestamps.BeginPass(commandList, "Skybox");
 
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             m_deferredTexture.GetResource(),
@@ -506,11 +518,13 @@ void Renderer::Render() {
         commandList->IASetPrimitiveTopology(m_skybox.GetPrimitiveTopology());
         commandList->IASetVertexBuffers(0, 1, &m_skyboxVertexBufferView);
         commandList->DrawInstanced(m_skyboxVertexBufferView.SizeInBytes / m_skyboxVertexBufferView.StrideInBytes, 1, 0, 0);
+        m_timestamps.EndPass(commandList);
     }
 
     // Blit pass
     {
         drez::dx::debug::ScopedEvent passScope{commandList, "Blit pass"};
+        m_timestamps.BeginPass(commandList, "Blit");
 
         commandList->SetComputeRootSignature(m_blit.GetRootSignature());
         commandList->SetPipelineState(m_blit.GetPipelineState());
@@ -535,28 +549,68 @@ void Renderer::Render() {
             static_cast<uint32_t>(std::ceil(m_height / shader_io::kBlitThreadY)),
             1
         );
+        m_timestamps.EndPass(commandList);
+    }
+
+    // ImGui pass
+    {
+        drez::dx::debug::ScopedEvent passScope{commandList, "ImGui pass"};
+        m_timestamps.BeginPass(commandList, "ImGui");
+
+        auto toRtv = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_composedTexture.GetResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+        commandList->ResourceBarrier(1, &toRtv);
+
+        const CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_composedTextureRtvOffset);
+        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+        commandList->RSSetViewports(1, &m_viewport);
+        commandList->RSSetScissorRects(1, &m_rect);
+
+        ID3D12DescriptorHeap *const imguiHeap = m_app.GetImGuiDescriptorHeap();
+        commandList->SetDescriptorHeaps(1, &imguiHeap);
+
+        ImGui::Render();
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+        auto toCopy = CD3DX12_RESOURCE_BARRIER::Transition(
+            m_composedTexture.GetResource(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_COPY_SOURCE
+        );
+        commandList->ResourceBarrier(1, &toCopy);
+
+        m_timestamps.EndPass(commandList);
     }
 
     // Copy to present
     {
         drez::dx::debug::ScopedEvent passScope{commandList, "Copy to present"};
-
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_composedTexture.GetResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_COPY_SOURCE
-        );
-        commandList->ResourceBarrier(1, &barrier);
-
         m_app.CopyToPresentImage(m_composedTexture.GetResource());
     }
 
+    m_timestamps.EndFrame(commandList);
 
     m_app.EndFrame();
 }
 
 void Renderer::Update(const FrameInfo &frameInfo) {
     const uint32_t frameIndex = frameInfo.frameIndex;
+
+    // Frame timing
+    {
+        using clock                 = std::chrono::high_resolution_clock;
+        const int64_t now           = clock::now().time_since_epoch().count();
+        if (m_lastFrameTickCount != 0) {
+            const double nanos = static_cast<double>(now - m_lastFrameTickCount) * static_cast<double>(clock::period::num) / clock::period::den;
+            m_lastFrameTimeMs  = static_cast<float>(nanos / 1.0e6);
+            m_frameTimeHistory[m_frameTimeHistoryOffset] = m_lastFrameTimeMs;
+            m_frameTimeHistoryOffset                     = (m_frameTimeHistoryOffset + 1) % kFrameHistorySize;
+        }
+        m_lastFrameTickCount = now;
+    }
 
     const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
     const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
@@ -571,4 +625,69 @@ void Renderer::Update(const FrameInfo &frameInfo) {
 
     const DirectX::XMFLOAT3 eye  = m_camera.GetLocation();
     m_deferredUniforms.cameraPos = {eye.x, eye.y, eye.z};
+
+    // Light-space matrix (depends on editable light direction)
+    {
+        using namespace DirectX;
+        const XMVECTOR L             = XMVector3Normalize(XMLoadFloat3(&m_deferredUniforms.lightDir));
+        const XMVECTOR sceneCenter   = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+        const XMVECTOR lightPos      = XMVectorAdd(sceneCenter, XMVectorScale(L, kLightDistance));
+        const XMVECTOR worldUp       = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        const XMMATRIX lightView     = XMMatrixLookAtRH(lightPos, sceneCenter, worldUp);
+        const XMMATRIX lightProj     = XMMatrixOrthographicRH(kShadowOrthoSize, kShadowOrthoSize, kShadowNear, kShadowFar);
+        const XMMATRIX lightViewProj = XMMatrixMultiply(lightView, lightProj);
+        XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
+        m_deferredUniforms.lightSpaceMatrix = m_lightSpaceMatrix;
+    }
+}
+
+void Renderer::BuildImGuiContent() {
+    if (ImGui::Begin("Debug Window")) {
+        if (ImGui::CollapsingHeader("Overall Performance", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Frame Time: %.3f ms", m_lastFrameTimeMs);
+            ImGui::Text("FPS: %.1f", m_lastFrameTimeMs > 0.0f ? 1000.0f / m_lastFrameTimeMs : 0.0f);
+            ImGui::PlotLines(
+                "Frame Time History",
+                m_frameTimeHistory.data(),
+                static_cast<int>(m_frameTimeHistory.size()),
+                static_cast<int>(m_frameTimeHistoryOffset),
+                nullptr,
+                0.0f,
+                33.3f,
+                ImVec2(0, 80)
+            );
+        }
+
+        if (ImGui::CollapsingHeader("Per-Pass Performance (GPU)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const auto &timings = m_timestamps.GetTimings();
+            std::vector<float> values;
+            values.reserve(timings.size());
+            float maxMs = 0.0f;
+            std::ranges::for_each(timings, [&](const DXTimestamps::PassTime &t) {
+                ImGui::Text("%s: %.3f ms", t.name.c_str(), t.milliseconds);
+                values.push_back(t.milliseconds);
+                maxMs = std::max(maxMs, t.milliseconds);
+            });
+            if (!values.empty()) {
+                ImGui::PlotHistogram(
+                    "Per-Pass (ms)",
+                    values.data(),
+                    static_cast<int>(values.size()),
+                    0,
+                    nullptr,
+                    0.0f,
+                    maxMs * 1.2f,
+                    ImVec2(0, 80)
+                );
+            }
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Sunlight")) {
+        ImGui::DragFloat3("Direction", &m_deferredUniforms.lightDir.x, 0.01f, -1.0f, 1.0f);
+        ImGui::ColorEdit3("Color", &m_deferredUniforms.lightColor.x);
+        ImGui::DragFloat("Intensity", &m_deferredUniforms.lightIntensity, 0.1f, 0.0f, 100.0f);
+    }
+    ImGui::End();
 }

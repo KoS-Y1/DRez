@@ -13,6 +13,7 @@
 #include "Debug.h"
 #include "Renderer.h"
 
+#include <imgui.h>
 #include <imgui_impl_sdl3.h>
 
 namespace {
@@ -56,8 +57,10 @@ void Window::Run() {
             {SDL_SCANCODE_E, kUp      },
         };
 
+        const ImGuiIO &io = ImGui::GetIO();
+
         // Camera movement
-        if (event.type == SDL_EVENT_KEY_DOWN) {
+        if (event.type == SDL_EVENT_KEY_DOWN && !io.WantCaptureKeyboard) {
             const auto pair = cameraMovement.find(event.key.scancode);
             if (pair != cameraMovement.end()) {
                 camera.ProcessMovement(pair->second);
@@ -65,7 +68,7 @@ void Window::Run() {
         }
 
         // Camera rotation
-        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        if (event.type == SDL_EVENT_MOUSE_MOTION && !io.WantCaptureMouse) {
             SDL_Keymod mod = SDL_GetModState();
             if (mod & SDL_KMOD_SHIFT) {
                 DirectX::XMFLOAT2 offset{event.motion.xrel, event.motion.yrel};

@@ -69,6 +69,10 @@ public:
 
     [[nodiscard]] ID3D12Device *GetDevice() const { return m_device.Get(); }
 
+    [[nodiscard]] ID3D12CommandQueue *GetCommandQueue() const { return m_commandQueue.Get(); }
+
+    [[nodiscard]] ID3D12DescriptorHeap *GetImGuiDescriptorHeap() const { return m_imguiHeap.heap.Get(); }
+
 public:
     [[nodiscard]] DXGraphicsPipeline CreateGraphicsPipeline(std::string_view inputFile) { return DXGraphicsPipeline(*this, inputFile); }
 
@@ -132,7 +136,6 @@ public:
 private:
     static constexpr uint64_t    kPointOneSecond{100000000};
     static constexpr DXGI_FORMAT kPresentFormat{DXGI_FORMAT_R8G8B8A8_UNORM};
-    static constexpr DXGI_FORMAT kDepthFormat{DXGI_FORMAT_R32_FLOAT};
 
     SDL_Window *m_window{};
     uint32_t    m_width{};

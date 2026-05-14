@@ -255,7 +255,7 @@ DXApp::DXApp(SDL_Window *window)
             .CommandQueue         = m_commandQueue.Get(),
             .NumFramesInFligt     = kMaxFramesInFlight,
             .RTVFormat            = kPresentFormat,
-            .DepthFormat          = kDepthFormat,
+            .DepthFormat          = DXGI_FORMAT_UNKNOWN,
             .SrvDescriptorAllocFn = &m_imguiHeap.Allocate,
             .SrvDescriptorFreeFn  = &m_imguiHeap.Free,
         };
