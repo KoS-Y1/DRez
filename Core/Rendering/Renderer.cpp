@@ -569,7 +569,7 @@ void Renderer::Render() {
         commandList->RSSetViewports(1, &m_viewport);
         commandList->RSSetScissorRects(1, &m_rect);
 
-        ID3D12DescriptorHeap *const imguiHeap = m_app.GetImGuiDescriptorHeap();
+        ID3D12DescriptorHeap * const imguiHeap = m_app.GetImGuiDescriptorHeap();
         commandList->SetDescriptorHeaps(1, &imguiHeap);
 
         ImGui::Render();
@@ -601,15 +601,16 @@ void Renderer::Update(const FrameInfo &frameInfo) {
 
     // Frame timing
     {
-        using clock                 = std::chrono::high_resolution_clock;
-        const int64_t now           = clock::now().time_since_epoch().count();
+        using clock    = std::chrono::steady_clock;
+        const auto now = clock::now();
         if (m_lastFrameTickCount != 0) {
-            const double nanos = static_cast<double>(now - m_lastFrameTickCount) * static_cast<double>(clock::period::num) / clock::period::den;
-            m_lastFrameTimeMs  = static_cast<float>(nanos / 1.0e6);
-            m_frameTimeHistory[m_frameTimeHistoryOffset] = m_lastFrameTimeMs;
-            m_frameTimeHistoryOffset                     = (m_frameTimeHistoryOffset + 1) % kFrameHistorySize;
+            const clock::time_point                        last{clock::duration{m_lastFrameTickCount}};
+            const std::chrono::duration<float, std::milli> delta = now - last;
+            m_lastFrameTimeMs                                    = delta.count();
+            m_frameTimeHistory[m_frameTimeHistoryOffset]         = m_lastFrameTimeMs;
+            m_frameTimeHistoryOffset                             = (m_frameTimeHistoryOffset + 1) % kFrameHistorySize;
         }
-        m_lastFrameTickCount = now;
+        m_lastFrameTickCount = now.time_since_epoch().count();
     }
 
     const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
@@ -659,7 +660,7 @@ void Renderer::BuildImGuiContent() {
         }
 
         if (ImGui::CollapsingHeader("Per-Pass Performance (GPU)", ImGuiTreeNodeFlags_DefaultOpen)) {
-            const auto &timings = m_timestamps.GetTimings();
+            const auto        &timings = m_timestamps.GetTimings();
             std::vector<float> values;
             values.reserve(timings.size());
             float maxMs = 0.0f;
@@ -669,16 +670,7 @@ void Renderer::BuildImGuiContent() {
                 maxMs = std::max(maxMs, t.milliseconds);
             });
             if (!values.empty()) {
-                ImGui::PlotHistogram(
-                    "Per-Pass (ms)",
-                    values.data(),
-                    static_cast<int>(values.size()),
-                    0,
-                    nullptr,
-                    0.0f,
-                    maxMs * 1.2f,
-                    ImVec2(0, 80)
-                );
+                ImGui::PlotHistogram("Per-Pass (ms)", values.data(), static_cast<int>(values.size()), 0, nullptr, 0.0f, maxMs * 1.2f, ImVec2(0, 80));
             }
         }
     }

@@ -250,14 +250,18 @@ DXApp::DXApp(SDL_Window *window)
 
         ImGui_ImplSDL3_InitForD3D(m_window);
 
-        ImGui_ImplDX12_InitInfo dx12InitInfo{
-            .Device               = m_device.Get(),
-            .CommandQueue         = m_commandQueue.Get(),
-            .NumFramesInFligt     = kMaxFramesInFlight,
-            .RTVFormat            = kPresentFormat,
-            .DepthFormat          = DXGI_FORMAT_UNKNOWN,
-            .SrvDescriptorAllocFn = &m_imguiHeap.Allocate,
-            .SrvDescriptorFreeFn  = &m_imguiHeap.Free,
+        ImGui_ImplDX12_InitInfo dx12InitInfo;
+        dx12InitInfo.Device            = m_device.Get();
+        dx12InitInfo.CommandQueue      = m_commandQueue.Get();
+        dx12InitInfo.NumFramesInFlight = kMaxFramesInFlight, dx12InitInfo.RTVFormat = kPresentFormat;
+        dx12InitInfo.DSVFormat            = DXGI_FORMAT_UNKNOWN;
+        dx12InitInfo.UserData             = &m_imguiHeap;
+        dx12InitInfo.SrvDescriptorHeap    = m_imguiHeap.heap.Get();
+        dx12InitInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *cpu, D3D12_GPU_DESCRIPTOR_HANDLE *gpu) {
+            static_cast<ImGuiHeap *>(info->UserData)->Allocate(info, cpu, gpu);
+        };
+        dx12InitInfo.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu) {
+            static_cast<ImGuiHeap *>(info->UserData)->Free(info, cpu, gpu);
         };
         ImGui_ImplDX12_Init(&dx12InitInfo);
     }

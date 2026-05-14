@@ -24,7 +24,7 @@
 #include <directx/d3dx12_root_signature.h>
 #include <vector>
 
-class SDL_Window;
+struct SDL_Window;
 
 struct FrameInfo {
     ID3D12GraphicsCommandList *commandList;
