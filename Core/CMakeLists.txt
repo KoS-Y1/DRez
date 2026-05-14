@@ -68,12 +68,25 @@ add_library(Rendering
         Rendering/Renderer.h
         Rendering/Camera.cpp
         Rendering/Camera.h
+        Rendering/Pass.cpp
+        Rendering/Pass.h
+        Rendering/ShadowPass.cpp
+        Rendering/ShadowPass.h
+        Rendering/GbufferPass.cpp
+        Rendering/GbufferPass.h
+        Rendering/DeferredPass.cpp
+        Rendering/DeferredPass.h
+        Rendering/SkyboxPass.cpp
+        Rendering/SkyboxPass.h
+        Rendering/BlitPass.cpp
+        Rendering/BlitPass.h
 )
 target_include_directories(Rendering PUBLIC Rendering)
 target_link_libraries(Rendering PUBLIC
         Microsoft::DirectXMath
         DX
         Resources
+        Files
 )
 
 add_library(Resources

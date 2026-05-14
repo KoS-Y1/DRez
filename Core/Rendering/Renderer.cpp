@@ -14,10 +14,15 @@
 #include <imgui_impl_dx12.h>
 #include <imgui_impl_sdl3.h>
 
+#include "BlitPass.h"
 #include "DXDebug.h"
 #include "DXUtils.h"
+#include "DeferredPass.h"
+#include "GbufferPass.h"
 #include "Mesh.h"
 #include "ResourceManager.h"
+#include "ShadowPass.h"
+#include "SkyboxPass.h"
 #include "VertexFormats.h"
 
 namespace {
@@ -41,18 +46,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
     , m_width(app.GetWindowWidth())
     , m_height(app.GetWindowHeight())
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height)})
-    , m_rect(CD3DX12_RECT{0, 0, static_cast<int32_t>(m_width), static_cast<int32_t>(m_height)})
-    , m_shadowViewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(kShadowMapSize), static_cast<float>(kShadowMapSize)})
-    , m_shadowRect(CD3DX12_RECT{0, 0, static_cast<int32_t>(kShadowMapSize), static_cast<int32_t>(kShadowMapSize)}) {
-    // Load pipelines
-    {
-        m_shadow   = m_app.CreateGraphicsPipeline("../Assets/Shaders/shadow.json");
-        m_gbuffer  = m_app.CreateGraphicsPipeline("../Assets/Shaders/gbuffer.json");
-        m_deferred = m_app.CreateComputePipeline("../Assets/Shaders/deferred.json");
-        m_skybox   = m_app.CreateGraphicsPipeline("../Assets/Shaders/skybox.json");
-        m_blit     = m_app.CreateComputePipeline("../Assets/Shaders/blit.json");
-    }
-
+    , m_rect(CD3DX12_RECT{0, 0, static_cast<int32_t>(m_width), static_cast<int32_t>(m_height)}) {
     // GPU timing
     m_timestamps = DXTimestamps{m_app, kMaxTimestampPasses};
 
@@ -342,6 +336,58 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         m_blitUniforms.dstIndex    = m_composedTextureUav.GetIndex();
         m_blitUniforms.samplerType = m_deferredTexture.GetSamplerType();
     }
+
+    // Passes (executed in vector order each frame)
+    {
+        m_passes.push_back(std::make_unique<ShadowPass>(
+            m_app,
+            "../Assets/Shaders/shadow.json",
+            m_shadowMapTexture,
+            m_shadowMapDsvOffset,
+            kShadowMapSize,
+            m_globalUniforms,
+            m_lightSpaceMatrix
+        ));
+        m_passes.push_back(std::make_unique<GbufferPass>(
+            m_app,
+            "../Assets/Shaders/gbuffer.json",
+            m_gbufferTextures,
+            m_gbufferRtvOffsets,
+            m_depthTextureDsvOffset,
+            m_width,
+            m_height,
+            m_globalUniforms
+        ));
+        m_passes.push_back(std::make_unique<DeferredPass>(
+            m_app,
+            "../Assets/Shaders/deferred.json",
+            m_gbufferTextures,
+            m_deferredTexture,
+            m_width,
+            m_height,
+            m_deferredUniforms
+        ));
+        m_passes.push_back(std::make_unique<SkyboxPass>(
+            m_app,
+            "../Assets/Shaders/skybox.json",
+            m_deferredTexture,
+            m_deferredTextureRtvOffset,
+            m_depthTextureDsvOffset,
+            m_skyboxVertexBufferView,
+            m_width,
+            m_height,
+            m_skyboxUniforms
+        ));
+        m_passes.push_back(std::make_unique<BlitPass>(
+            m_app,
+            "../Assets/Shaders/blit.json",
+            m_deferredTexture,
+            m_composedTexture,
+            m_width,
+            m_height,
+            m_blitUniforms
+        ));
+    }
 }
 
 void Renderer::Render() {
@@ -359,198 +405,13 @@ void Renderer::Render() {
 
     Update(frameInfo);
 
-    // Shadow pass
-    {
-        drez::dx::debug::ScopedEvent passScope{commandList, "Shadow pass"};
-        m_timestamps.BeginPass(commandList, "Shadow");
+    const DrawContext context{
+        .commandList = commandList,
+        .timestamps  = &m_timestamps,
+        .frameIndex  = frameIndex,
+    };
 
-        commandList->SetGraphicsRootSignature(m_shadow.GetRootSignature());
-        commandList->SetPipelineState(m_shadow.GetPipelineState());
-        commandList->RSSetViewports(1, &m_shadowViewport);
-        commandList->RSSetScissorRects(1, &m_shadowRect);
-
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_shadowMapTexture.GetResource(),
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE
-        );
-        commandList->ResourceBarrier(1, &barrier);
-
-        const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_shadowMapDsvOffset);
-        commandList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
-        commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-        commandList->IASetPrimitiveTopology(m_shadow.GetPrimitiveTopology());
-
-        // Reuse GlobalUniforms; viewProj is repurposed as the light-space matrix here
-        shader_io::GlobalUniforms shadowUniforms = m_globalUniforms[frameIndex];
-        shadowUniforms.viewProj                  = m_lightSpaceMatrix;
-        commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &shadowUniforms, 0);
-
-        std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
-            const Mesh                   &mesh = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
-            const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
-            drez::dx::debug::ScopedEvent  drawScope{commandList, mesh.GetName()};
-            commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
-            commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
-        });
-
-        auto readBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_shadowMapTexture.GetResource(),
-            D3D12_RESOURCE_STATE_DEPTH_WRITE,
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-        );
-        commandList->ResourceBarrier(1, &readBarrier);
-        m_timestamps.EndPass(commandList);
-    }
-
-    // Gbuffer pass
-    {
-        drez::dx::debug::ScopedEvent passScope{commandList, "Gbuffer pass"};
-        m_timestamps.BeginPass(commandList, "Gbuffer");
-
-        commandList->SetGraphicsRootSignature(m_gbuffer.GetRootSignature());
-        commandList->SetPipelineState(m_gbuffer.GetPipelineState());
-        commandList->RSSetViewports(1, &m_viewport);
-        commandList->RSSetScissorRects(1, &m_rect);
-
-        std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
-        barriers.reserve(m_gbufferTextures.size());
-        for (const auto &texture: m_gbufferTextures) {
-            barriers.push_back(
-                CD3DX12_RESOURCE_BARRIER::Transition(
-                    texture.GetResource(),
-                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-                    D3D12_RESOURCE_STATE_RENDER_TARGET
-                )
-            );
-        }
-        commandList->ResourceBarrier(barriers.size(), barriers.data());
-
-        std::vector<CD3DX12_CPU_DESCRIPTOR_HANDLE> rtvHandles;
-        rtvHandles.reserve(m_gbufferRtvOffsets.size());
-        for (const int32_t offset: m_gbufferRtvOffsets) {
-            rtvHandles.push_back(m_app.GetRenderTargetViewHandle(offset));
-        }
-        const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
-        commandList->OMSetRenderTargets(rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
-
-        static constexpr float rtvClearColor[]{1.0f, 0.0f, 0.0f, 1.0f};
-        for (const auto &handle: rtvHandles) {
-            commandList->ClearRenderTargetView(handle, rtvClearColor, 0, nullptr);
-        }
-        commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-        commandList->IASetPrimitiveTopology(m_gbuffer.GetPrimitiveTopology());
-
-        commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &m_globalUniforms[frameIndex], 0);
-
-        std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
-            const Mesh                   &mesh = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
-            const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
-            drez::dx::debug::ScopedEvent  drawScope{commandList, mesh.GetName()};
-            commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());
-            commandList->DrawIndexedInstanced(triangleMesh.indices.count, 1, 0, 0, i);
-        });
-        m_timestamps.EndPass(commandList);
-    }
-
-    // Deferred pass
-    {
-        drez::dx::debug::ScopedEvent passScope{commandList, "Deferred pass"};
-        m_timestamps.BeginPass(commandList, "Deferred");
-
-        std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
-        barriers.reserve(m_gbufferTextures.size() + 1);
-        for (const auto &texture: m_gbufferTextures) {
-            barriers.push_back(
-                CD3DX12_RESOURCE_BARRIER::Transition(
-                    texture.GetResource(),
-                    D3D12_RESOURCE_STATE_RENDER_TARGET,
-                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-                )
-            );
-        }
-        barriers.push_back(
-            CD3DX12_RESOURCE_BARRIER::Transition(
-                m_deferredTexture.GetResource(),
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-            )
-        );
-        commandList->ResourceBarrier(barriers.size(), barriers.data());
-
-        commandList->SetComputeRootSignature(m_deferred.GetRootSignature());
-        commandList->SetPipelineState(m_deferred.GetPipelineState());
-        commandList->SetComputeRoot32BitConstants(0, sizeof(shader_io::DeferredUniforms) / sizeof(uint32_t), &m_deferredUniforms, 0);
-
-        commandList->Dispatch(
-            static_cast<uint32_t>(std::ceil(m_width / shader_io::kDeferredThreadX)),
-            static_cast<uint32_t>(std::ceil(m_height / shader_io::kDeferredThreadY)),
-            1
-        );
-        m_timestamps.EndPass(commandList);
-    }
-
-    // Skybox pass
-    {
-        drez::dx::debug::ScopedEvent passScope{commandList, "Skybox pass"};
-        m_timestamps.BeginPass(commandList, "Skybox");
-
-        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-            m_deferredTexture.GetResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-        commandList->ResourceBarrier(1, &barrier);
-
-        commandList->SetGraphicsRootSignature(m_skybox.GetRootSignature());
-        commandList->SetPipelineState(m_skybox.GetPipelineState());
-        commandList->RSSetViewports(1, &m_viewport);
-        commandList->RSSetScissorRects(1, &m_rect);
-
-        const CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_app.GetRenderTargetViewHandle(m_deferredTextureRtvOffset);
-        const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthTextureDsvOffset);
-        commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-
-        commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::SkyboxUniforms) / sizeof(uint32_t), &m_skyboxUniforms, 0);
-
-        commandList->IASetPrimitiveTopology(m_skybox.GetPrimitiveTopology());
-        commandList->IASetVertexBuffers(0, 1, &m_skyboxVertexBufferView);
-        commandList->DrawInstanced(m_skyboxVertexBufferView.SizeInBytes / m_skyboxVertexBufferView.StrideInBytes, 1, 0, 0);
-        m_timestamps.EndPass(commandList);
-    }
-
-    // Blit pass
-    {
-        drez::dx::debug::ScopedEvent passScope{commandList, "Blit pass"};
-        m_timestamps.BeginPass(commandList, "Blit");
-
-        commandList->SetComputeRootSignature(m_blit.GetRootSignature());
-        commandList->SetPipelineState(m_blit.GetPipelineState());
-        commandList->SetComputeRoot32BitConstants(0, sizeof(shader_io::BlitUniforms) / sizeof(uint32_t), &m_blitUniforms, 0);
-
-        const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
-            CD3DX12_RESOURCE_BARRIER::Transition(
-                m_deferredTexture.GetResource(),
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
-                D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-            ),
-            CD3DX12_RESOURCE_BARRIER::Transition(
-                m_composedTexture.GetResource(),
-                D3D12_RESOURCE_STATE_COPY_SOURCE,
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-            )
-        };
-        commandList->ResourceBarrier(barriers.size(), barriers.data());
-
-        commandList->Dispatch(
-            static_cast<uint32_t>(std::ceil(m_width / shader_io::kBlitThreadX)),
-            static_cast<uint32_t>(std::ceil(m_height / shader_io::kBlitThreadY)),
-            1
-        );
-        m_timestamps.EndPass(commandList);
-    }
+    std::ranges::for_each(m_passes, [&](const std::unique_ptr<Pass> &pass) { pass->Execute(context); });
 
     // ImGui pass
     {

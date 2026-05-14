@@ -5,6 +5,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 #include <vector>
 
 #include <directx/d3dx12.h>
@@ -13,12 +14,11 @@
 #include "Camera.h"
 #include "DXApp.h"
 #include "DXBuffer.h"
-#include "DXComputePipeline.h"
-#include "DXGraphicsPipeline.h"
 #include "DXShaderResourceView.h"
 #include "DXTexture.h"
 #include "DXTimestamps.h"
 #include "DXUnorderedAccessView.h"
+#include "Pass.h"
 
 #include "global_io.slang"
 #include "resources_io.slang"
@@ -46,15 +46,6 @@ private:
 
     CD3DX12_VIEWPORT m_viewport{};
     CD3DX12_RECT     m_rect{};
-
-    CD3DX12_VIEWPORT m_shadowViewport{};
-    CD3DX12_RECT     m_shadowRect{};
-
-    DXGraphicsPipeline m_shadow{};
-    DXGraphicsPipeline m_gbuffer{};
-    DXComputePipeline  m_deferred{};
-    DXGraphicsPipeline m_skybox{};
-    DXComputePipeline  m_blit{};
 
     void Update(const FrameInfo &frameInfo);
     void BuildImGuiContent();
@@ -97,6 +88,9 @@ private:
     // Deferred bindless info buffer
     DXBuffer             m_deferredInfoBuffer{};
     DXShaderResourceView m_deferredInfoBufferSrv{};
+
+    // Passes (executed in vector order each frame)
+    std::vector<std::unique_ptr<Pass>> m_passes;
 
     // GPU timing
     DXTimestamps m_timestamps{};
