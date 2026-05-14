@@ -14,7 +14,11 @@ struct VSOut
     float3 T : TANGENT;
     float3 B : BINORMAL;
     float3 N : NORMAL;
-    nointerpolation uint instanceId : TEXCOORD1;
+
+    float4 prevClipPos : TEXCOORD1;
+    float4 curClipPos : TEXCOORD2;
+
+    nointerpolation uint instanceId : TEXCOORD3;
 }
 
 struct FSOut
@@ -23,6 +27,7 @@ struct FSOut
     float4 normalRoughness : SV_Target1;
     float4 albedoOcculusion : SV_Target2;
     float4 emissiveMetallic : SV_Target3;
+    float2 motionVector : SV_Target4;
 }
 
 internal float3 Sample(const float2 uv, const Texture2D texture, const shader_io::SamplerType sampler)
@@ -33,6 +38,19 @@ internal float3 Sample(const float2 uv, const Texture2D texture, const shader_io
     }
 
     return texture.Sample(gNearest, uv).rgb;
+}
+
+internal float2 CalculateMotionVector(float4 prevPos, float4 curPos)
+{
+    // Convert to NDC
+    float2 prev = prevPos.xy / prevPos.w;
+    float2 cur = curPos.xy / curPos.w;
+
+    // Remap to [0, 1]
+    prev = prev * 0.5f + 0.5f;
+    cur = cur * 0.5f + 0.5f;
+
+    return prev - cur;
 }
 
 [shader("vertex")]
@@ -82,6 +100,8 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
     output.T = T;
     output.B = B;
     output.N = N;
+    output.prevClipPos = mul(float4(output.worldPos, 1.0f), pushConstants->prevViewProj);
+    output.curClipPos = output.sv_position;
     output.instanceId = instanceId;
 
     return output;
@@ -153,13 +173,12 @@ FSOut fragmentMain(VSOut input)
     const float3x3 TBN = float3x3(input.T, input.B, input.N);
     normal = normalize(mul(normal, TBN));
 
-    // const float2 motionVector = CalculateMotionVector(vsInput.prevClipPos, vsInput.curClipPos);
 
     output.worldPosInstanceId = float4(input.worldPos, float(input.instanceId));
     output.albedoOcculusion = float4(albedo, ao);
     output.normalRoughness = float4(normal, roughness);
     output.emissiveMetallic = float4(emissive, metallic);
-    // output.motionVector = float4(motionVector, 0.0f, 0.0f);
+    output.motionVector = CalculateMotionVector(input.prevClipPos, input.curClipPos);
 
     return output;
 }

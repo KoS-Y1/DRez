@@ -56,33 +56,37 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         int32_t dsvOffset{0};
 
         // Gbuffer attachments
-        const std::vector<std::string> gbufferNames{
-            "gbuffer0_texture",
-            "gbuffer1_texture",
-            "gbuffer2_texture",
-            "gbuffer3_texture",
-        };
-        constexpr DXGI_FORMAT                 kGbufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-        const D3D12_SHADER_RESOURCE_VIEW_DESC gbufferSrvDesc{
-            .Format                  = kGbufferFormat,
-            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
-            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            .Texture2D               = {.MipLevels = 1},
+        const std::vector<std::string>
+            gbufferNames{"gbuffer0_texture", "gbuffer1_texture", "gbuffer2_texture", "gbuffer3_texture", "gubffer4_texture"};
+
+        const std::vector<DXGI_FORMAT> gbufferFormats{
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            DXGI_FORMAT_R16G16B16A16_FLOAT,
+            DXGI_FORMAT_R16G16_FLOAT,
         };
 
         m_gbufferTextures.reserve(gbufferNames.size());
         m_gbufferRtvOffsets.reserve(gbufferNames.size());
         m_gbufferSrvs.reserve(gbufferNames.size());
 
-        for (const auto &name: gbufferNames) {
+        std::ranges::for_each(std::views::iota(uint32_t{0}, gbufferNames.size()), [&](uint32_t i) {
+            const D3D12_SHADER_RESOURCE_VIEW_DESC gbufferSrvDesc{
+                .Format                  = gbufferFormats[i],
+                .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Texture2D               = {.MipLevels = 1},
+            };
+
             DXTexture texture = m_app.CreateTexture(
                 m_width,
                 m_height,
-                kGbufferFormat,
+                gbufferFormats[i],
                 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
                 D3D12_HEAP_FLAG_NONE,
                 shader_io::SamplerType::Nearest,
-                name
+                gbufferNames[i]
             );
             m_app.CreateRenderTargetView(texture.GetResource(), rtvOffset);
             DXShaderResourceView srv = m_app.CreateDXShaderResourceView(texture.GetResource(), gbufferSrvDesc);
@@ -90,7 +94,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             m_gbufferTextures.push_back(std::move(texture));
             m_gbufferRtvOffsets.push_back(rtvOffset++);
             m_gbufferSrvs.push_back(std::move(srv));
-        }
+        });
 
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
@@ -339,55 +343,54 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
     // Passes (executed in vector order each frame)
     {
-        m_passes.push_back(std::make_unique<ShadowPass>(
-            m_app,
-            "../Assets/Shaders/shadow.json",
-            m_shadowMapTexture,
-            m_shadowMapDsvOffset,
-            kShadowMapSize,
-            m_globalUniforms,
-            m_lightSpaceMatrix
-        ));
-        m_passes.push_back(std::make_unique<GbufferPass>(
-            m_app,
-            "../Assets/Shaders/gbuffer.json",
-            m_gbufferTextures,
-            m_gbufferRtvOffsets,
-            m_depthTextureDsvOffset,
-            m_width,
-            m_height,
-            m_globalUniforms
-        ));
-        m_passes.push_back(std::make_unique<DeferredPass>(
-            m_app,
-            "../Assets/Shaders/deferred.json",
-            m_gbufferTextures,
-            m_deferredTexture,
-            m_width,
-            m_height,
-            m_deferredUniforms
-        ));
-        m_passes.push_back(std::make_unique<SkyboxPass>(
-            m_app,
-            "../Assets/Shaders/skybox.json",
-            m_deferredTexture,
-            m_deferredTextureRtvOffset,
-            m_depthTextureDsvOffset,
-            m_skyboxVertexBufferView,
-            m_width,
-            m_height,
-            m_skyboxUniforms
-        ));
-        m_passes.push_back(std::make_unique<BlitPass>(
-            m_app,
-            "../Assets/Shaders/blit.json",
-            m_deferredTexture,
-            m_composedTexture,
-            m_width,
-            m_height,
-            m_blitUniforms
-        ));
+        m_passes.push_back(
+            std::make_unique<ShadowPass>(
+                m_app,
+                "../Assets/Shaders/shadow.json",
+                m_shadowMapTexture,
+                m_shadowMapDsvOffset,
+                kShadowMapSize,
+                m_globalUniforms,
+                m_lightSpaceMatrix
+            )
+        );
+        m_passes.push_back(
+            std::make_unique<GbufferPass>(
+                m_app,
+                "../Assets/Shaders/gbuffer.json",
+                m_gbufferTextures,
+                m_gbufferRtvOffsets,
+                m_depthTextureDsvOffset,
+                m_width,
+                m_height,
+                m_globalUniforms
+            )
+        );
+        m_passes.push_back(
+            std::make_unique<
+                DeferredPass>(m_app, "../Assets/Shaders/deferred.json", m_gbufferTextures, m_deferredTexture, m_width, m_height, m_deferredUniforms)
+        );
+        m_passes.push_back(
+            std::make_unique<SkyboxPass>(
+                m_app,
+                "../Assets/Shaders/skybox.json",
+                m_deferredTexture,
+                m_deferredTextureRtvOffset,
+                m_depthTextureDsvOffset,
+                m_skyboxVertexBufferView,
+                m_width,
+                m_height,
+                m_skyboxUniforms
+            )
+        );
+        m_passes.push_back(
+            std::make_unique<BlitPass>(m_app, "../Assets/Shaders/blit.json", m_deferredTexture, m_composedTexture, m_width, m_height, m_blitUniforms)
+        );
     }
+}
+
+Renderer::~Renderer() {
+    m_app.WaitForGpu();
 }
 
 void Renderer::Render() {
@@ -474,11 +477,14 @@ void Renderer::Update(const FrameInfo &frameInfo) {
         m_lastFrameTickCount = now.time_since_epoch().count();
     }
 
+    const uint32_t lastFrameIndex = frameIndex > 0 ? frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
+
     const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
     const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
     const DirectX::XMMATRIX   view      = DirectX::XMLoadFloat4x4(&viewFloat);
     const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
     const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
+    m_globalUniforms[frameIndex].prevViewProj = m_globalUniforms[lastFrameIndex].viewProj;
     DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
 
     DirectX::XMMATRIX viewNoTrans = view;

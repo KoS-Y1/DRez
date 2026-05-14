@@ -50,6 +50,8 @@ public:
     void      EndFrame();
     void      CopyToPresentImage(ID3D12Resource *resource);
 
+    void WaitForGpu() { WaitForFence(SignalQueue()); }
+
     template<class Func>
     void ImmediateSubmit(Func &&func) {
         std::scoped_lock<std::mutex> lock(m_immediateMutes);

@@ -33,7 +33,7 @@ public:
     Renderer(Renderer &&)                 = delete;
     Renderer &operator=(Renderer &&)      = delete;
 
-    ~Renderer() = default;
+    ~Renderer() ;
 
     void Render();
 

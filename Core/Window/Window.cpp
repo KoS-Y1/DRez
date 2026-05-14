@@ -38,6 +38,7 @@ Window::Window()
 }
 
 Window::~Window() {
+    m_renderer.reset();
     m_dxApp.reset();
 }
 
