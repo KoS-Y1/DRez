@@ -28,6 +28,7 @@ protected:
     void TransitionBarriers(const DrawContext &context) override;
     void BindResources(const DrawContext &context) override;
     void Record(const DrawContext &context) override;
+    void FinalizeBarriers(const DrawContext &context) override;
 
 private:
     std::span<const DXTexture> m_taaTextures;

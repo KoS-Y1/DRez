@@ -27,7 +27,7 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     const Texture2D<float4> prevTaaResult =
         DescriptorHandle<Texture2D<float4>>(uint2(pushConstants.prevTaaResultIndex, 0));
     const Texture2D<float2> velocityBuffer =
-        DescriptorHandle<Texture2D<float2>>(uint2(pushConstants.prevTaaResultIndex, 0));
+        DescriptorHandle<Texture2D<float2>>(uint2(pushConstants.velocityBufferIndex, 0));
     const Texture2D<float> depthBuffer = DescriptorHandle<Texture2D<float>>(uint2(pushConstants.depthBufferIndex, 0));
     // Resolve
     float3 srcSampleTotal = float3(0.0f);
@@ -36,7 +36,7 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     float3 neighborhoodMax = float3(-10000.0f);
     float3 m1 = float3(0.0f);
     float3 m2 = float3(0.0f);
-    float closestDepth = 0.0f;
+    float closestDepth = 1.0f;
     int2 closestDepthPixelPos = int2(0, 0);
 
     [ForceUnroll]
@@ -52,7 +52,7 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
             const float subSampleWeight = FilterMitchell1D(subSampleDistance);
 
             srcSampleTotal += neighbor * subSampleWeight;
-            srcSampleWeight += srcSampleWeight;
+            srcSampleWeight += subSampleWeight;
 
             neighborhoodMin = min(neighborhoodMin, neighbor);
             neighborhoodMax = max(neighborhoodMax, neighbor);
@@ -61,7 +61,7 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
             m2 += neighbor * neighbor;
 
             const float curDepth = depthBuffer[curPx];
-            if (curDepth > closestDepth)
+            if (curDepth < closestDepth)
             {
                 closestDepth = curDepth;
                 closestDepthPixelPos = curPx;
@@ -70,7 +70,7 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     }
 
     const float2 uv = float2(px + 0.5f) / float2(width, height);
-    const float2 motionVec = velocityBuffer[closestDepthPixelPos] * float2(0.5f, 0.5f);
+    const float2 motionVec = velocityBuffer[closestDepthPixelPos];
     const float2 historyUv = uv + motionVec;
     const float3 srcSample = srcSampleTotal / srcSampleWeight;
 

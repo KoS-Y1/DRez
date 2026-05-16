@@ -263,23 +263,24 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 .Texture2D     = {.MipSlice = 0, .PlaneSlice = 0},
             };
             m_taaTextureUavs[i] = m_app.CreateDXUnorderedAccessView(m_taaTextures[i].GetResource(), uavDesc);
-            m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
-                std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
-                barriers.reserve(m_taaTextures.size());
+        });
 
-                for (const auto & t :m_taaTextures)
-                std::ranges::for_each(m_taaTextures, [&barriers](const DXTexture &t) {
-                    barriers.push_back(
-                        CD3DX12_RESOURCE_BARRIER::Transition(
-                            t.GetResource(),
-                            D3D12_RESOURCE_STATE_COMMON,
-                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-                        )
-                    );
-                });
+        // Transition all TAA targets once, after every resource has been created
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+            barriers.reserve(m_taaTextures.size());
 
-                commandList->ResourceBarrier(barriers.size(), barriers.data());
+            std::ranges::for_each(m_taaTextures, [&barriers](const DXTexture &t) {
+                barriers.push_back(
+                    CD3DX12_RESOURCE_BARRIER::Transition(
+                        t.GetResource(),
+                        D3D12_RESOURCE_STATE_COMMON,
+                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+                    )
+                );
             });
+
+            commandList->ResourceBarrier(barriers.size(), barriers.data());
         });
     }
 
@@ -450,7 +451,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 m_taaTextures,
                 m_deferredTexture,
                 m_gbufferTextures[shader_io::kVelocityBufferIndex],
-                m_deferredTexture,
+                m_depthTexture,
                 m_width,
                 m_height,
                 m_taaUniforms

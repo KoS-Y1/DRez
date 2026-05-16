@@ -5,6 +5,8 @@
 #include "TaaPass.h"
 
 #include <cmath>
+#include <vector>
+
 #include <directx/d3dx12_barriers.h>
 
 TaaPass::TaaPass(
@@ -29,12 +31,27 @@ TaaPass::TaaPass(
 }
 
 void TaaPass::TransitionBarriers(const DrawContext &context) {
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_taaTextures[context.frameIndex].GetResource(),
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-    );
-    context.commandList->ResourceBarrier(1, &barrier);
+    const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
+        // Current TAA target: read state -> UAV write
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_taaTextures[context.frameIndex].GetResource(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+        ),
+        // Deferred src: skybox left it as a render target
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_deferredTexture.GetResource(),
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+        ),
+        // Depth: gbuffer/skybox left it as a depth target
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_depthTexture.GetResource(),
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+        ),
+    };
+    context.commandList->ResourceBarrier(barriers.size(), barriers.data());
 }
 
 void TaaPass::BindResources(const DrawContext &context) {
@@ -47,4 +64,22 @@ void TaaPass::Record(const DrawContext &context) {
         static_cast<uint32_t>(std::ceil(m_height / shader_io::kTaaThreadY)),
         1
     );
+}
+
+void TaaPass::FinalizeBarriers(const DrawContext &context) {
+    const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
+        // Restore deferred src for next frame's deferred pass
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_deferredTexture.GetResource(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        ),
+        // Restore depth for next frame's gbuffer pass
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_depthTexture.GetResource(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE
+        ),
+    };
+    context.commandList->ResourceBarrier(barriers.size(), barriers.data());
 }
