@@ -284,7 +284,7 @@ FrameInfo DXApp::BeginFrame() {
     const std::vector<ID3D12DescriptorHeap *> heaps{m_descriptorHeap.Get()};
     m_commandLists[m_frameIndex]->SetDescriptorHeaps(heaps.size(), heaps.data());
 
-    return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get(), .frameIndex = m_frameIndex};
+    return FrameInfo{.commandList = m_commandLists[m_frameIndex].Get(), .frameIndex = m_frameIndex, .frameCount = m_frameCount};
 }
 
 void DXApp::EndFrame() {
@@ -295,6 +295,7 @@ void DXApp::EndFrame() {
 
     m_fenceValues[m_frameIndex] = SignalQueue();
     m_frameIndex                = (m_frameIndex + 1) % kMaxFramesInFlight;
+    ++m_frameCount;
 }
 
 void DXApp::CopyToPresentImage(ID3D12Resource *resource) {

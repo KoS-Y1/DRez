@@ -21,6 +21,7 @@ struct DrawContext {
     ID3D12GraphicsCommandList *commandList{};
     DXTimestamps              *timestamps{};
     uint32_t                   frameIndex{};
+    uint64_t                   frameCount{};
 };
 
 enum class PipelineType : uint8_t {
@@ -44,9 +45,10 @@ protected:
     // Resource state transitions before the pass body
     virtual void TransitionBarriers(const DrawContext &context) = 0;
     // Root constants / descriptor tables / render targets / vertex+index buffers / viewport+scissor
-    virtual void BindResources(const DrawContext &context) = 0;
+    virtual void BindResources(const DrawContext &context)      = 0;
     // Draw or Dispatch
-    virtual void Record(const DrawContext &context) = 0;
+    virtual void Record(const DrawContext &context)             = 0;
+
     // Optional post-work transitions (e.g. return write-target back to a read state)
     virtual void FinalizeBarriers(const DrawContext &context) {}
 

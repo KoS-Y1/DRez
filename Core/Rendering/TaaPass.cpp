@@ -4,6 +4,8 @@
 
 #include "TaaPass.h"
 
+#include "Debug.h"
+
 #include <cmath>
 #include <vector>
 
@@ -31,6 +33,27 @@ TaaPass::TaaPass(
 }
 
 void TaaPass::TransitionBarriers(const DrawContext &context) {
+    // First frame
+    if (context.frameCount == 0) {
+        const uint32_t prevFrameIndex = context.frameIndex > 0 ? context.frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
+
+        const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_taaTextures[prevFrameIndex].GetResource(),
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_COPY_DEST
+            ),
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_deferredTexture.GetResource(),
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_COPY_SOURCE
+            )
+        };
+        context.commandList->ResourceBarrier(barriers.size(), barriers.data());
+
+        return;
+    }
+
     const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
         // Current TAA target: read state -> UAV write
         CD3DX12_RESOURCE_BARRIER::Transition(
@@ -59,6 +82,12 @@ void TaaPass::BindResources(const DrawContext &context) {
 }
 
 void TaaPass::Record(const DrawContext &context) {
+    if (context.frameCount == 0) {
+        const uint32_t prevFrameIndex = context.frameIndex > 0 ? context.frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
+        context.commandList->CopyResource(m_taaTextures[prevFrameIndex].GetResource(), m_deferredTexture.GetResource());
+
+        return;
+    }
     context.commandList->Dispatch(
         static_cast<uint32_t>(std::ceil(m_width / shader_io::kTaaThreadX)),
         static_cast<uint32_t>(std::ceil(m_height / shader_io::kTaaThreadY)),
@@ -67,19 +96,39 @@ void TaaPass::Record(const DrawContext &context) {
 }
 
 void TaaPass::FinalizeBarriers(const DrawContext &context) {
-    const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
+    D3D12_RESOURCE_STATES deferredSrcState =
+        context.frameCount == 0 ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+
+    std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
         // Restore deferred src for next frame's deferred pass
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            m_deferredTexture.GetResource(),
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-        ),
-        // Restore depth for next frame's gbuffer pass
+        CD3DX12_RESOURCE_BARRIER::Transition(m_deferredTexture.GetResource(), deferredSrcState, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE),
+
+    };
+
+    if (context.frameCount == 0) {
+        const uint32_t prevFrameIndex = context.frameIndex > 0 ? context.frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
+        barriers.push_back(
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_taaTextures[prevFrameIndex].GetResource(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+            )
+        );
+        barriers.push_back(
+            CD3DX12_RESOURCE_BARRIER::Transition(
+                m_taaTextures[context.frameIndex].GetResource(),
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+            )
+        );
+
+    } else {
+        barriers.push_back(    // Restore depth for next frame's gbuffer pass
         CD3DX12_RESOURCE_BARRIER::Transition(
             m_depthTexture.GetResource(),
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
             D3D12_RESOURCE_STATE_DEPTH_WRITE
-        ),
-    };
+        ));
+    }
     context.commandList->ResourceBarrier(barriers.size(), barriers.data());
 }

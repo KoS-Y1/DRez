@@ -39,5 +39,5 @@ private:
     uint32_t m_width;
     uint32_t m_height;
 
-    const shader_io::TaaUniforms m_taaUniforms;
+    const shader_io::TaaUniforms &m_taaUniforms;
 };

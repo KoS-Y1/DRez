@@ -28,7 +28,8 @@ struct SDL_Window;
 
 struct FrameInfo {
     ID3D12GraphicsCommandList *commandList;
-    const uint32_t             frameIndex;
+    uint32_t                   frameIndex;
+    uint64_t                   frameCount;
 };
 
 class DXApp {
@@ -148,6 +149,7 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>, kMaxFramesInFlight> m_commandLists{};
 
     uint32_t m_frameIndex{0};
+    uint64_t m_frameCount{0};
 
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    m_immediateCommandAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> m_immediateCommandList;

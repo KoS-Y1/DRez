@@ -236,7 +236,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        // TAA targets
+        // TAA
         std::ranges::for_each(std::views::iota(uint32_t{0}, m_taaTextures.size()), [&](uint32_t i) {
             m_taaTextures[i] = m_app.CreateTexture(
                 m_width,
@@ -468,7 +468,7 @@ Renderer::~Renderer() {
 }
 
 void Renderer::Render() {
-    FrameInfo                  frameInfo   = m_app.BeginFrame();
+    const FrameInfo                  frameInfo   = m_app.BeginFrame();
     ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
     uint32_t                   frameIndex  = frameInfo.frameIndex;
 
@@ -486,6 +486,7 @@ void Renderer::Render() {
         .commandList = commandList,
         .timestamps  = &m_timestamps,
         .frameIndex  = frameIndex,
+        .frameCount = frameInfo.frameCount
     };
 
     std::ranges::for_each(m_passes, [&](const std::unique_ptr<Pass> &pass) { pass->Execute(context); });
