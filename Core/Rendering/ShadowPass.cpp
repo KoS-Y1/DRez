@@ -18,16 +18,14 @@ ShadowPass::ShadowPass(
     const DXTexture                           &shadowMap,
     int32_t                                    shadowMapDsvOffset,
     uint32_t                                   shadowMapSize,
-    std::span<const shader_io::GlobalUniforms> globalUniforms,
-    const DirectX::XMFLOAT4X4                 &lightSpaceMatrix
+    const shader_io::ShadowUniforms           &shadowUniforms
 )
     : Pass(dxApp, inputFile)
     , m_shadowMap(shadowMap)
     , m_shadowMapDsvOffset(shadowMapDsvOffset)
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(shadowMapSize), static_cast<float>(shadowMapSize)})
     , m_scissor(CD3DX12_RECT{0, 0, static_cast<int32_t>(shadowMapSize), static_cast<int32_t>(shadowMapSize)})
-    , m_globalUniforms(globalUniforms)
-    , m_lightSpaceMatrix(lightSpaceMatrix) {
+    , m_shadowUniforms(shadowUniforms) {
 }
 
 void ShadowPass::TransitionBarriers(const DrawContext &context) {
@@ -44,10 +42,7 @@ void ShadowPass::BindResources(const DrawContext &context) {
     context.commandList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
     context.commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    // Reuse GlobalUniforms; viewProj is repurposed as the light-space matrix here
-    shader_io::GlobalUniforms shadowUniforms = m_globalUniforms[context.frameIndex];
-    shadowUniforms.viewProj                  = m_lightSpaceMatrix;
-    context.commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &shadowUniforms, 0);
+    context.commandList->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::ShadowUniforms) / sizeof(uint32_t), &m_shadowUniforms, 0);
 }
 
 void ShadowPass::Record(const DrawContext &context) {

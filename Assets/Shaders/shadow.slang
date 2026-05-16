@@ -1,7 +1,7 @@
 import ShaderIO;
 import Utils;
 
-ConstantBuffer<shader_io::GlobalUniforms> pushConstants;
+ConstantBuffer<shader_io::ShadowUniforms> pushConstants;
 
 struct VSOut
 {
@@ -28,9 +28,8 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 
     const float3 pos = GetVertexAttribute<float3>(gltfBuffer, mesh.triangleMesh.positions, vertexId);
 
-    // viewProj is repurposed as the light-space matrix for this pass
     const float4 worldPos = mul(float4(pos, 1.0f), instance.transform);
-    output.sv_position = mul(worldPos, pushConstants.viewProj);
+    output.sv_position = mul(worldPos, pushConstants.lightSpaceMatrix);
 
     return output;
 }

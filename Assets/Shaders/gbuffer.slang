@@ -1,7 +1,7 @@
 import ShaderIO;
 import Utils;
 
-ConstantBuffer<shader_io::GlobalUniforms> pushConstants;
+ConstantBuffer<shader_io::GbufferUniforms> pushConstants;
 
 SamplerState gNearest : register(s0);
 SamplerState gLinear : register(s1);

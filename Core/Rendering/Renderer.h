@@ -52,11 +52,12 @@ private:
 
 private:
     // Resources
-    std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> m_globalUniforms{};
-    shader_io::DeferredUniforms                                      m_deferredUniforms{};
-    shader_io::SkyboxUniforms                                        m_skyboxUniforms{};
-    shader_io::BlitUniforms                                          m_blitUniforms{};
-    shader_io::TaaUniforms                                           m_taaUniforms{};
+    std::array<shader_io::GbufferUniforms, DXApp::kMaxFramesInFlight> m_gbufferUniforms{};
+    shader_io::ShadowUniforms                                         m_shadowUniforms{};
+    shader_io::DeferredUniforms                                       m_deferredUniforms{};
+    shader_io::SkyboxUniforms                                         m_skyboxUniforms{};
+    shader_io::BlitUniforms                                           m_blitUniforms{};
+    shader_io::TaaUniforms                                            m_taaUniforms{};
 
     DXBuffer                 m_skyboxVertexBuffer{};
     D3D12_VERTEX_BUFFER_VIEW m_skyboxVertexBufferView{};

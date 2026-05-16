@@ -350,16 +350,16 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                                             .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
                                             },
             };
-            m_gbufferSrvs[i] = m_app.CreateDXShaderResourceView(m_gbufferInfoBuffers[i].GetBuffer(), desc);
+            m_gbufferInfoSrvs[i] = m_app.CreateDXShaderResourceView(m_gbufferInfoBuffers[i].GetBuffer(), desc);
 
-            m_globalUniforms[i].gbufferInfoIndex = m_gbufferSrvs[i].GetIndex();
+            m_gbufferUniforms[i].gbufferInfoIndex = m_gbufferInfoSrvs[i].GetIndex();
         });
 
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             std::vector<D3D12_RESOURCE_BARRIER> barriers;
-            barriers.reserve(m_gbufferSrvs.size());
+            barriers.reserve(m_gbufferInfoBuffers.size());
 
-            std::ranges::transform(m_gbufferInfoBuffers, barriers.begin(), [](const DXBuffer &b) {
+            std::ranges::transform(m_gbufferInfoBuffers, std::back_inserter(barriers), [](const DXBuffer &b) {
                 return CD3DX12_RESOURCE_BARRIER::Transition(b.GetBuffer(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             });
             commandList->ResourceBarrier(barriers.size(), barriers.data());
@@ -417,11 +417,14 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
     // Uniforms
     {
-        std::ranges::for_each(m_globalUniforms, [](shader_io::GlobalUniforms &uniforms) {
+        std::ranges::for_each(m_gbufferUniforms, [](shader_io::GbufferUniforms &uniforms) {
             uniforms.instancesIndex = ResourceManager::GetInstance().GetInstancesBindlessIndex();
             uniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
             uniforms.materialsIndex = ResourceManager::GetInstance().GetMaterialsBindlessIndex();
         });
+
+        m_shadowUniforms.instancesIndex = ResourceManager::GetInstance().GetInstancesBindlessIndex();
+        m_shadowUniforms.meshesIndex    = ResourceManager::GetInstance().GetMeshesBindlessIndex();
 
         m_deferredUniforms.deferredInfoIndex = m_deferredInfoBufferSrv.GetIndex();
         m_deferredUniforms.dstIndex          = m_deferredTextureUav.GetIndex();
@@ -444,8 +447,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 m_shadowMapTexture,
                 m_shadowMapDsvOffset,
                 kShadowMapSize,
-                m_globalUniforms,
-                m_lightSpaceMatrix
+                m_shadowUniforms
             )
         );
         m_passes.push_back(
@@ -457,7 +459,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 m_depthTextureDsvOffset,
                 m_width,
                 m_height,
-                m_globalUniforms
+                m_gbufferUniforms
             )
         );
         m_passes.push_back(
@@ -621,6 +623,7 @@ void Renderer::Update(const FrameInfo &frameInfo) {
         const XMMATRIX lightViewProj = XMMatrixMultiply(lightView, lightProj);
         XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
         m_deferredUniforms.lightSpaceMatrix = m_lightSpaceMatrix;
+        m_shadowUniforms.lightSpaceMatrix   = m_lightSpaceMatrix;
     }
 
     // TAA uniforms

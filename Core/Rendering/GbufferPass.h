@@ -25,7 +25,7 @@ public:
         int32_t                                                                 depthDsvOffset,
         uint32_t                                                                width,
         uint32_t                                                                height,
-        const std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> &globalUniforms
+        const std::array<shader_io::GbufferUniforms, DXApp::kMaxFramesInFlight> &gbufferUniforms
     );
 
 protected:
@@ -39,5 +39,5 @@ private:
     int32_t                                                                 m_depthDsvOffset;
     CD3DX12_VIEWPORT                                                        m_viewport;
     CD3DX12_RECT                                                            m_scissor;
-    const std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> &m_globalUniforms;
+    const std::array<shader_io::GbufferUniforms, DXApp::kMaxFramesInFlight> &m_gbufferUniforms;
 };

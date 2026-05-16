@@ -20,7 +20,7 @@ GbufferPass::GbufferPass(
     int32_t                                                                 depthDsvOffset,
     uint32_t                                                                width,
     uint32_t                                                                height,
-    const std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> &globalUniforms
+    const std::array<shader_io::GbufferUniforms, DXApp::kMaxFramesInFlight> &gbufferUniforms
 )
     : Pass(dxApp, inputFile)
     , m_gbufferTextures(gbufferTextures)
@@ -28,7 +28,7 @@ GbufferPass::GbufferPass(
     , m_depthDsvOffset(depthDsvOffset)
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)})
     , m_scissor(CD3DX12_RECT{0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)})
-    , m_globalUniforms(globalUniforms) {
+    , m_gbufferUniforms(gbufferUniforms) {
 }
 
 void GbufferPass::TransitionBarriers(const DrawContext &context) {
@@ -59,7 +59,7 @@ void GbufferPass::BindResources(const DrawContext &context) {
     context.commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     context.commandList
-        ->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GlobalUniforms) / sizeof(uint32_t), &m_globalUniforms[context.frameIndex], 0);
+        ->SetGraphicsRoot32BitConstants(0, sizeof(shader_io::GbufferUniforms) / sizeof(uint32_t), &m_gbufferUniforms[context.frameIndex], 0);
 }
 
 void GbufferPass::Record(const DrawContext &context) {

@@ -14,12 +14,21 @@ namespace shader_io
 {
 static const uint32_t kVelocityBufferIndex = 4;
 
-SLANG_PUBLIC struct GlobalUniforms
+SLANG_PUBLIC struct GbufferUniforms
 {
     SLANG_PUBLIC uint32_t gbufferInfoIndex;
     SLANG_PUBLIC uint32_t instancesIndex;
     SLANG_PUBLIC uint32_t meshesIndex;
     SLANG_PUBLIC uint32_t materialsIndex;
+};
+
+// Shadow pass (light-space matrix lives in root constants; only one matrix, fits)
+SLANG_PUBLIC struct ShadowUniforms
+{
+    SLANG_PUBLIC float4x4 lightSpaceMatrix;
+    SLANG_PUBLIC uint32_t instancesIndex;
+    SLANG_PUBLIC uint32_t meshesIndex;
+    uint32_t padding[2];
 };
 
 // Deferred pass

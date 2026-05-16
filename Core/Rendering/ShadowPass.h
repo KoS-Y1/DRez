@@ -23,8 +23,7 @@ public:
         const DXTexture                           &shadowMap,
         int32_t                                    shadowMapDsvOffset,
         uint32_t                                   shadowMapSize,
-        std::span<const shader_io::GlobalUniforms> globalUniforms,
-        const DirectX::XMFLOAT4X4                 &lightSpaceMatrix
+        const shader_io::ShadowUniforms           &shadowUniforms
     );
 
 protected:
@@ -38,6 +37,5 @@ private:
     int32_t                                     m_shadowMapDsvOffset;
     CD3DX12_VIEWPORT                            m_viewport;
     CD3DX12_RECT                                m_scissor;
-    std::span<const shader_io::GlobalUniforms> &m_globalUniforms;
-    const DirectX::XMFLOAT4X4                  &m_lightSpaceMatrix;
+    const shader_io::ShadowUniforms            &m_shadowUniforms;
 };
