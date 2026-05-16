@@ -18,13 +18,13 @@
 class ShadowPass : public Pass {
 public:
     ShadowPass(
-        DXApp                               &dxApp,
-        std::string_view                     inputFile,
-        const DXTexture                     &shadowMap,
-        int32_t                              shadowMapDsvOffset,
-        uint32_t                             shadowMapSize,
+        DXApp                                     &dxApp,
+        std::string_view                           inputFile,
+        const DXTexture                           &shadowMap,
+        int32_t                                    shadowMapDsvOffset,
+        uint32_t                                   shadowMapSize,
         std::span<const shader_io::GlobalUniforms> globalUniforms,
-        const DirectX::XMFLOAT4X4           &lightSpaceMatrix
+        const DirectX::XMFLOAT4X4                 &lightSpaceMatrix
     );
 
 protected:
@@ -34,10 +34,10 @@ protected:
     void FinalizeBarriers(const DrawContext &context) override;
 
 private:
-    const DXTexture                      &m_shadowMap;
-    int32_t                               m_shadowMapDsvOffset;
-    CD3DX12_VIEWPORT                      m_viewport;
-    CD3DX12_RECT                          m_scissor;
+    const DXTexture                            &m_shadowMap;
+    int32_t                                     m_shadowMapDsvOffset;
+    CD3DX12_VIEWPORT                            m_viewport;
+    CD3DX12_RECT                                m_scissor;
     std::span<const shader_io::GlobalUniforms> &m_globalUniforms;
-    const DirectX::XMFLOAT4X4            &m_lightSpaceMatrix;
+    const DirectX::XMFLOAT4X4                  &m_lightSpaceMatrix;
 };

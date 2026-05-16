@@ -62,8 +62,8 @@ private:
     D3D12_VERTEX_BUFFER_VIEW m_skyboxVertexBufferView{};
 
 
-    DXTexture m_depthTexture{};
-    int32_t   m_depthTextureDsvOffset{};
+    DXTexture            m_depthTexture{};
+    int32_t              m_depthTextureDsvOffset{};
     DXShaderResourceView m_depthTextureSrv{};
 
     // Shadow map
@@ -77,6 +77,11 @@ private:
     std::vector<DXTexture>            m_gbufferTextures{};
     std::vector<int32_t>              m_gbufferRtvOffsets{};
     std::vector<DXShaderResourceView> m_gbufferSrvs{};
+
+    // Gbuffer bindless info buffer
+    std::array<shader_io::GbufferInfo, DXApp::kMaxFramesInFlight> m_gbufferInfos{};
+    std::array<DXBuffer, DXApp::kMaxFramesInFlight>               m_gbufferInfoBuffers{};
+    std::array<DXShaderResourceView, DXApp::kMaxFramesInFlight>   m_gbufferInfoSrvs{};
 
     // Deferred (HDR) target
     DXTexture             m_deferredTexture{};
@@ -101,6 +106,8 @@ private:
     // Passes (executed in vector order each frame)
     std::vector<std::unique_ptr<Pass>> m_passes;
 
+private:
+    // Debugging
     // GPU timing
     DXTimestamps m_timestamps{};
 

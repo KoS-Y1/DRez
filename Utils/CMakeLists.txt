@@ -1,7 +1,9 @@
-add_library(Utils INTERFACE
+add_library(Utils
         Singleton.h
+        Utils.cpp
+        Utils.h
 )
-target_include_directories(Utils INTERFACE .)
+target_include_directories(Utils PUBLIC .)
 
 add_library(Debug INTERFACE
         Debug/Debug.h

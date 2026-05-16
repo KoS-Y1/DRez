@@ -23,6 +23,7 @@
 #include "ShadowPass.h"
 #include "SkyboxPass.h"
 #include "TaaPass.h"
+#include "Utils.h"
 #include "VertexFormats.h"
 
 namespace {
@@ -38,6 +39,8 @@ constexpr float kShadowFar{100.0f};
 constexpr float kLightDistance{10.0f};
 
 constexpr uint32_t kMaxTimestampPasses{8};
+
+constexpr uint32_t kMaxJitterCount{8};
 } // namespace
 
 Renderer::Renderer(DXApp &app, const Camera &camera)
@@ -272,11 +275,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
             std::ranges::for_each(m_taaTextures, [&barriers](const DXTexture &t) {
                 barriers.push_back(
-                    CD3DX12_RESOURCE_BARRIER::Transition(
-                        t.GetResource(),
-                        D3D12_RESOURCE_STATE_COMMON,
-                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-                    )
+                    CD3DX12_RESOURCE_BARRIER::Transition(t.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
                 );
             });
 
@@ -331,6 +330,40 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         m_skyboxVertexBufferView.BufferLocation = m_skyboxVertexBuffer.GetGPUVirtualAddress();
         m_skyboxVertexBufferView.StrideInBytes  = sizeof(VertexP);
         m_skyboxVertexBufferView.SizeInBytes    = size;
+    }
+
+    // Gbuffer info buffer
+    {
+        const uint64_t size = sizeof(shader_io::GbufferInfo);
+        std::ranges::for_each(std::views::iota(uint32_t{0}, m_gbufferInfoBuffers.size()), [this](uint32_t i) {
+            m_gbufferInfoBuffers[i] =
+                m_app.CreateBuffer(D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, size, "gbuffer_info_buffer");
+
+            const D3D12_SHADER_RESOURCE_VIEW_DESC desc{
+                .Format                  = DXGI_FORMAT_UNKNOWN,
+                .ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Buffer                  = {
+                                            .FirstElement        = 0,
+                                            .NumElements         = 1,
+                                            .StructureByteStride = sizeof(shader_io::GbufferInfo),
+                                            .Flags               = D3D12_BUFFER_SRV_FLAG_NONE,
+                                            },
+            };
+            m_gbufferSrvs[i] = m_app.CreateDXShaderResourceView(m_gbufferInfoBuffers[i].GetBuffer(), desc);
+
+            m_globalUniforms[i].gbufferInfoIndex = m_gbufferSrvs[i].GetIndex();
+        });
+
+        m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+            std::vector<D3D12_RESOURCE_BARRIER> barriers;
+            barriers.reserve(m_gbufferSrvs.size());
+
+            std::ranges::transform(m_gbufferInfoBuffers, barriers.begin(), [](const DXBuffer &b) {
+                return CD3DX12_RESOURCE_BARRIER::Transition(b.GetBuffer(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            });
+            commandList->ResourceBarrier(barriers.size(), barriers.data());
+        });
     }
 
     // Deferred info buffer
@@ -468,7 +501,7 @@ Renderer::~Renderer() {
 }
 
 void Renderer::Render() {
-    const FrameInfo                  frameInfo   = m_app.BeginFrame();
+    const FrameInfo            frameInfo   = m_app.BeginFrame();
     ID3D12GraphicsCommandList *commandList = frameInfo.commandList;
     uint32_t                   frameIndex  = frameInfo.frameIndex;
 
@@ -482,12 +515,7 @@ void Renderer::Render() {
 
     Update(frameInfo);
 
-    const DrawContext context{
-        .commandList = commandList,
-        .timestamps  = &m_timestamps,
-        .frameIndex  = frameIndex,
-        .frameCount = frameInfo.frameCount
-    };
+    const DrawContext context{.commandList = commandList, .timestamps = &m_timestamps, .frameIndex = frameIndex, .frameCount = frameInfo.frameCount};
 
     std::ranges::for_each(m_passes, [&](const std::unique_ptr<Pass> &pass) { pass->Execute(context); });
 
@@ -554,13 +582,25 @@ void Renderer::Update(const FrameInfo &frameInfo) {
 
     const uint32_t prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
 
-    const DirectX::XMFLOAT4X4 viewFloat       = m_camera.GetViewMatrix();
-    const DirectX::XMFLOAT4X4 projFloat       = m_camera.GetProjectionMatrix();
-    const DirectX::XMMATRIX   view            = DirectX::XMLoadFloat4x4(&viewFloat);
-    const DirectX::XMMATRIX   proj            = DirectX::XMLoadFloat4x4(&projFloat);
-    const DirectX::XMMATRIX   viewProj        = DirectX::XMMatrixMultiply(view, proj);
-    m_globalUniforms[frameIndex].prevViewProj = m_globalUniforms[prevFrameIndex].viewProj;
-    DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
+    const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
+    const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
+    const DirectX::XMMATRIX   view      = DirectX::XMLoadFloat4x4(&viewFloat);
+    const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
+    const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
+
+    m_gbufferInfos[frameIndex].prevViewProj = m_gbufferInfos[prevFrameIndex].viewProj;
+    DirectX::XMStoreFloat4x4(&m_gbufferInfos[frameIndex].viewProj, viewProj);
+
+    const uint32_t          jitterIndex    = frameInfo.frameCount % kMaxJitterCount + 1;
+    const float             haltonX        = drez::utils::Halton(jitterIndex, 2);
+    const float             haltonY        = drez::utils::Halton(jitterIndex, 3);
+    const float             jitterX        = (haltonX - 0.5f) * 2.0f / static_cast<float>(m_width);
+    const float             jitterY        = (haltonY - 0.5f) * 2.0f / static_cast<float>(m_height);
+    const DirectX::XMMATRIX jitter         = DirectX::XMMatrixTranslation(jitterX, jitterY, 0.0f);
+    const DirectX::XMMATRIX viewProjJitter = DirectX::XMMatrixMultiply(view, DirectX::XMMatrixMultiply(proj, jitter));
+    DirectX::XMStoreFloat4x4(&m_gbufferInfos[frameIndex].viewProjJitter, viewProjJitter);
+
+    m_gbufferInfoBuffers[frameIndex].Upload(sizeof(shader_io::GbufferInfo), &m_gbufferInfos[frameIndex]);
 
     DirectX::XMMATRIX viewNoTrans = view;
     viewNoTrans.r[3]              = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);

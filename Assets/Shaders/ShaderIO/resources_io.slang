@@ -67,12 +67,19 @@ SLANG_PUBLIC struct InstanceInfo
     uint32_t padding[2];
 };
 
+SLANG_PUBLIC struct GbufferInfo
+{
+    SLANG_PUBLIC float4x4 viewProj;
+    SLANG_PUBLIC float4x4 prevViewProj;
+    SLANG_PUBLIC float4x4 viewProjJitter;
+};
+
 SLANG_PUBLIC struct DeferredInfo
 {
-    SLANG_PUBLIC uint32_t gbuffer0Index;    // worldPos + instanceId
-    SLANG_PUBLIC uint32_t gbuffer1Index;    // normal + roughness 
-    SLANG_PUBLIC uint32_t gbuffer2Index;    // albedo + ao
-    SLANG_PUBLIC uint32_t gbuffer3Index;    // emissive + metallic
+    SLANG_PUBLIC uint32_t gbuffer0Index; // worldPos + instanceId
+    SLANG_PUBLIC uint32_t gbuffer1Index; // normal + roughness
+    SLANG_PUBLIC uint32_t gbuffer2Index; // albedo + ao
+    SLANG_PUBLIC uint32_t gbuffer3Index; // emissive + metallic
 
     SLANG_PUBLIC uint32_t irradianceIndex;
     SLANG_PUBLIC uint32_t specularIndex;

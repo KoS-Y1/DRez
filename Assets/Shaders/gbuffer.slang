@@ -66,9 +66,15 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
         (DescriptorHandle<StructuredBuffer<shader_io::InstanceInfo>>)uint2(pushConstants.instancesIndex, 0);
     const StructuredBuffer<shader_io::MeshInfo> meshes =
         (DescriptorHandle<StructuredBuffer<shader_io::MeshInfo>>)uint2(pushConstants.meshesIndex, 0);
+    const shader_io::GbufferInfo gbufferInfo =
+        ((DescriptorHandle<StructuredBuffer<shader_io::GbufferInfo>>)uint2(pushConstants.gbufferInfoIndex, 0))[0];
 
     const shader_io::InstanceInfo instance = instances[instanceId];
     const shader_io::MeshInfo mesh = meshes[instance.meshHandle];
+
+    const float4x4 viewProj = gbufferInfo.viewProj;
+    const float4x4 prevViewProj = gbufferInfo.prevViewProj;
+    const float4x4 viewProjJitter = gbufferInfo.viewProjJitter;
 
     ByteAddressBuffer gltfBuffer = (DescriptorHandle<ByteAddressBuffer>)uint2(mesh.gltfBufferIndex, 0);
 
@@ -97,12 +103,12 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
 
     output.uv = GetVertexAttribute<float2>(gltfBuffer, mesh.triangleMesh.texCoords, vertexId);
     output.worldPos = mul(float4(pos, 1.0f), instance.transform).xyz;
-    output.sv_position = mul(float4(output.worldPos, 1.0f), pushConstants.viewProj);
+    output.sv_position = mul(float4(output.worldPos, 1.0f), viewProjJitter);
     output.T = T;
     output.B = B;
     output.N = N;
-    output.prevClipPos = mul(float4(output.worldPos, 1.0f), pushConstants.prevViewProj);
-    output.curClipPos = mul(float4(output.worldPos, 1.0f), pushConstants.viewProj);
+    output.prevClipPos = mul(float4(output.worldPos, 1.0f), prevViewProj);
+    output.curClipPos = mul(float4(output.worldPos, 1.0f), viewProj);
     output.instanceId = instanceId;
 
     return output;

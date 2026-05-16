@@ -16,14 +16,10 @@ static const uint32_t kVelocityBufferIndex = 4;
 
 SLANG_PUBLIC struct GlobalUniforms
 {
-    SLANG_PUBLIC float4x4 viewProj;
-    SLANG_PUBLIC float4x4 prevViewProj;
-
-    // Buffer index in the heap
+    SLANG_PUBLIC uint32_t gbufferInfoIndex;
     SLANG_PUBLIC uint32_t instancesIndex;
     SLANG_PUBLIC uint32_t meshesIndex;
     SLANG_PUBLIC uint32_t materialsIndex;
-    uint32_t padding;
 };
 
 // Deferred pass
