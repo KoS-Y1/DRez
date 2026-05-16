@@ -15,8 +15,8 @@
 GbufferPass::GbufferPass(
     DXApp                                                                  &dxApp,
     std::string_view                                                        inputFile,
-    const std::vector<DXTexture>                                           &gbufferTextures,
-    const std::vector<int32_t>                                             &gbufferRtvOffsets,
+    std::span<const DXTexture>                                              gbufferTextures,
+    std::span<const int32_t>                                               gbufferRtvOffsets,
     int32_t                                                                 depthDsvOffset,
     uint32_t                                                                width,
     uint32_t                                                                height,
@@ -28,7 +28,8 @@ GbufferPass::GbufferPass(
     , m_depthDsvOffset(depthDsvOffset)
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)})
     , m_scissor(CD3DX12_RECT{0, 0, static_cast<int32_t>(width), static_cast<int32_t>(height)})
-    , m_globalUniforms(globalUniforms) {}
+    , m_globalUniforms(globalUniforms) {
+}
 
 void GbufferPass::TransitionBarriers(const DrawContext &context) {
     std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
@@ -63,7 +64,7 @@ void GbufferPass::BindResources(const DrawContext &context) {
 
 void GbufferPass::Record(const DrawContext &context) {
     std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
-        const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
+        const Mesh                   &mesh = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
         const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
         drez::dx::debug::ScopedEvent  drawScope{context.commandList, mesh.GetName()};
         context.commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());

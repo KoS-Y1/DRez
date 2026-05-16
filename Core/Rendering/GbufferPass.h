@@ -5,7 +5,7 @@
 #pragma once
 
 #include <array>
-#include <vector>
+#include <span>
 
 #include <directx/d3dx12.h>
 
@@ -20,8 +20,8 @@ public:
     GbufferPass(
         DXApp                                                                  &dxApp,
         std::string_view                                                        inputFile,
-        const std::vector<DXTexture>                                           &gbufferTextures,
-        const std::vector<int32_t>                                             &gbufferRtvOffsets,
+        std::span<const DXTexture>                                              gbufferTextures,
+        std::span<const int32_t>                                                gbufferRtvOffsets,
         int32_t                                                                 depthDsvOffset,
         uint32_t                                                                width,
         uint32_t                                                                height,
@@ -34,8 +34,8 @@ protected:
     void Record(const DrawContext &context) override;
 
 private:
-    const std::vector<DXTexture>                                           &m_gbufferTextures;
-    const std::vector<int32_t>                                             &m_gbufferRtvOffsets;
+    std::span<const DXTexture>                                              m_gbufferTextures;
+    std::span<const int32_t>                                               m_gbufferRtvOffsets;
     int32_t                                                                 m_depthDsvOffset;
     CD3DX12_VIEWPORT                                                        m_viewport;
     CD3DX12_RECT                                                            m_scissor;

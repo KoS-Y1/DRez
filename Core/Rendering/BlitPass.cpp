@@ -11,27 +11,28 @@
 #include <directx/d3dx12_barriers.h>
 
 BlitPass::BlitPass(
-    DXApp                          &dxApp,
-    std::string_view                inputFile,
-    const DXTexture                &deferredTexture,
-    const DXTexture                &composedTexture,
-    uint32_t                        width,
-    uint32_t                        height,
-    const shader_io::BlitUniforms  &blitUniforms
+    DXApp                         &dxApp,
+    std::string_view               inputFile,
+    std::span<const DXTexture>     taaTextures,
+    const DXTexture               &composedTexture,
+    uint32_t                       width,
+    uint32_t                       height,
+    const shader_io::BlitUniforms &blitUniforms
 )
     : Pass(dxApp, inputFile)
-    , m_deferredTexture(deferredTexture)
+    , m_taaTextures(taaTextures)
     , m_composedTexture(composedTexture)
     , m_width(width)
     , m_height(height)
-    , m_blitUniforms(blitUniforms) {}
+    , m_blitUniforms(blitUniforms) {
+}
 
 void BlitPass::TransitionBarriers(const DrawContext &context) {
     const std::vector<CD3DX12_RESOURCE_BARRIER> barriers{
         CD3DX12_RESOURCE_BARRIER::Transition(
-            m_deferredTexture.GetResource(),
-            D3D12_RESOURCE_STATE_RENDER_TARGET,
-            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+            m_taaTextures[context.frameIndex].GetResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
         ),
         CD3DX12_RESOURCE_BARRIER::Transition(
             m_composedTexture.GetResource(),

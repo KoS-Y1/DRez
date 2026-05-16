@@ -115,7 +115,6 @@ public:
 public:
     // Resource
     void CreateRenderTargetView(ID3D12Resource *resource, int32_t index);
-    void CreateDepthStencilView(ID3D12Resource *resource, int32_t index);
     void CreateDepthStencilView(ID3D12Resource *resource, int32_t index, const D3D12_DEPTH_STENCIL_VIEW_DESC &desc);
     void CreateShaderResourceView(ID3D12Resource *resource, int32_t index, const D3D12_SHADER_RESOURCE_VIEW_DESC &desc);
     void CreateUnorderedAccessView(ID3D12Resource *resource, int32_t index, const D3D12_UNORDERED_ACCESS_VIEW_DESC &desc);

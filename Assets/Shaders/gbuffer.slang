@@ -50,7 +50,8 @@ internal float2 CalculateMotionVector(float4 prevPos, float4 curPos)
     prev = prev * 0.5f + 0.5f;
     cur = cur * 0.5f + 0.5f;
 
-    return prev - cur;
+    // Flip Y
+    return float2(prev.x - cur.x, cur.y - prev.y);
 }
 
 [shader("vertex")]
@@ -100,8 +101,8 @@ VSOut vertexMain(uint vertexId: SV_VertexID, uint instanceIndex: SV_InstanceID,
     output.T = T;
     output.B = B;
     output.N = N;
-    output.prevClipPos = mul(float4(output.worldPos, 1.0f), pushConstants->prevViewProj);
-    output.curClipPos = output.sv_position;
+    output.prevClipPos = mul(float4(output.worldPos, 1.0f), pushConstants.prevViewProj);
+    output.curClipPos = mul(float4(output.worldPos, 1.0f), pushConstants.viewProj);
     output.instanceId = instanceId;
 
     return output;
@@ -172,7 +173,6 @@ FSOut fragmentMain(VSOut input)
 
     const float3x3 TBN = float3x3(input.T, input.B, input.N);
     normal = normalize(mul(normal, TBN));
-
 
     output.worldPosInstanceId = float4(input.worldPos, float(input.instanceId));
     output.albedoOcculusion = float4(albedo, ao);

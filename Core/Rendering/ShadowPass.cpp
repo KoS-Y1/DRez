@@ -13,13 +13,13 @@
 #include "ResourceManager.h"
 
 ShadowPass::ShadowPass(
-    DXApp                                                                  &dxApp,
-    std::string_view                                                        inputFile,
-    const DXTexture                                                        &shadowMap,
-    int32_t                                                                 shadowMapDsvOffset,
-    uint32_t                                                                shadowMapSize,
-    const std::array<shader_io::GlobalUniforms, DXApp::kMaxFramesInFlight> &globalUniforms,
-    const DirectX::XMFLOAT4X4                                              &lightSpaceMatrix
+    DXApp                                     &dxApp,
+    std::string_view                           inputFile,
+    const DXTexture                           &shadowMap,
+    int32_t                                    shadowMapDsvOffset,
+    uint32_t                                   shadowMapSize,
+    std::span<const shader_io::GlobalUniforms> globalUniforms,
+    const DirectX::XMFLOAT4X4                 &lightSpaceMatrix
 )
     : Pass(dxApp, inputFile)
     , m_shadowMap(shadowMap)
@@ -27,7 +27,8 @@ ShadowPass::ShadowPass(
     , m_viewport(CD3DX12_VIEWPORT{0.0f, 0.0f, static_cast<float>(shadowMapSize), static_cast<float>(shadowMapSize)})
     , m_scissor(CD3DX12_RECT{0, 0, static_cast<int32_t>(shadowMapSize), static_cast<int32_t>(shadowMapSize)})
     , m_globalUniforms(globalUniforms)
-    , m_lightSpaceMatrix(lightSpaceMatrix) {}
+    , m_lightSpaceMatrix(lightSpaceMatrix) {
+}
 
 void ShadowPass::TransitionBarriers(const DrawContext &context) {
     auto barrier =
@@ -51,7 +52,7 @@ void ShadowPass::BindResources(const DrawContext &context) {
 
 void ShadowPass::Record(const DrawContext &context) {
     std::ranges::for_each(std::views::iota(0u, ResourceManager::GetInstance().GetInstanceCount()), [&](uint32_t i) {
-        const Mesh                   &mesh         = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
+        const Mesh                   &mesh = ResourceManager::GetInstance().GetMesh(ResourceManager::GetInstance().GetInstanceInfo(i).meshHandle);
         const shader_io::TriangleMesh triangleMesh = mesh.GetMesh().triangleMesh;
         drez::dx::debug::ScopedEvent  drawScope{context.commandList, mesh.GetName()};
         context.commandList->IASetIndexBuffer(&mesh.GetIndexBufferView());

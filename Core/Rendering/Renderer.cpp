@@ -19,10 +19,10 @@
 #include "DXUtils.h"
 #include "DeferredPass.h"
 #include "GbufferPass.h"
-#include "Mesh.h"
 #include "ResourceManager.h"
 #include "ShadowPass.h"
 #include "SkyboxPass.h"
+#include "TaaPass.h"
 #include "VertexFormats.h"
 
 namespace {
@@ -111,14 +111,28 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
         m_depthTexture = m_app.CreateTexture(
             m_width,
             m_height,
-            DXGI_FORMAT_D32_FLOAT,
+            DXGI_FORMAT_R32_TYPELESS,
             D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
             D3D12_HEAP_FLAG_NONE,
             shader_io::SamplerType::Nearest,
-            "depth_texture"
+            "depth_texture",
+            DXGI_FORMAT_D32_FLOAT
         );
-        m_app.CreateDepthStencilView(m_depthTexture.GetResource(), dsvOffset);
+        const D3D12_DEPTH_STENCIL_VIEW_DESC depthDsvDesc{
+            .Format        = DXGI_FORMAT_D32_FLOAT,
+            .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+            .Flags         = D3D12_DSV_FLAG_NONE,
+            .Texture2D     = {.MipSlice = 0},
+        };
+        m_app.CreateDepthStencilView(m_depthTexture.GetResource(), dsvOffset, depthDsvDesc);
         m_depthTextureDsvOffset = dsvOffset++;
+        const D3D12_SHADER_RESOURCE_VIEW_DESC depthSrvDesc{
+            .Format                  = DXGI_FORMAT_R32_FLOAT,
+            .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D               = {.MipLevels = 1},
+        };
+        m_depthTextureSrv = m_app.CreateDXShaderResourceView(m_depthTexture.GetResource(), depthSrvDesc);
 
         m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
             auto barrier =
@@ -163,7 +177,7 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             commandList->ResourceBarrier(1, &barrier);
         });
 
-        // Deferred composited HDR target (compute write -> skybox render -> blit read)
+        // Deferred composited HDR target
         m_deferredTexture = m_app.CreateTexture(
             m_width,
             m_height,
@@ -221,7 +235,54 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
                 CD3DX12_RESOURCE_BARRIER::Transition(m_composedTexture.GetResource(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE);
             commandList->ResourceBarrier(1, &barrier);
         });
+
+        // TAA targets
+        std::ranges::for_each(std::views::iota(uint32_t{0}, m_taaTextures.size()), [&](uint32_t i) {
+            m_taaTextures[i] = m_app.CreateTexture(
+                m_width,
+                m_height,
+                DXGI_FORMAT_R16G16B16A16_FLOAT,
+                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                D3D12_HEAP_FLAG_NONE,
+                shader_io::SamplerType::Linear,
+                "taa_texture_" + std::to_string(i)
+            );
+
+            const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{
+                .Format                  = DXGI_FORMAT_R16G16B16A16_FLOAT,
+                .ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Texture2D               = {
+                                            .MipLevels = 1,
+                                            }
+            };
+            m_taaTextureSrvs[i] = m_app.CreateDXShaderResourceView(m_taaTextures[i].GetResource(), srvDesc);
+            const D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{
+                .Format        = DXGI_FORMAT_R16G16B16A16_FLOAT,
+                .ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+                .Texture2D     = {.MipSlice = 0, .PlaneSlice = 0},
+            };
+            m_taaTextureUavs[i] = m_app.CreateDXUnorderedAccessView(m_taaTextures[i].GetResource(), uavDesc);
+            m_app.ImmediateSubmit([this](ID3D12GraphicsCommandList *commandList) {
+                std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+                barriers.reserve(m_taaTextures.size());
+
+                for (const auto & t :m_taaTextures)
+                std::ranges::for_each(m_taaTextures, [&barriers](const DXTexture &t) {
+                    barriers.push_back(
+                        CD3DX12_RESOURCE_BARRIER::Transition(
+                            t.GetResource(),
+                            D3D12_RESOURCE_STATE_COMMON,
+                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+                        )
+                    );
+                });
+
+                commandList->ResourceBarrier(barriers.size(), barriers.data());
+            });
+        });
     }
+
 
     // Skybox
     {
@@ -336,7 +397,6 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
 
         m_skyboxUniforms.skyboxIndex = ResourceManager::GetInstance().GetSkyboxBindlessIndex();
 
-        m_blitUniforms.srcIndex    = m_deferredTextureSrv.GetIndex();
         m_blitUniforms.dstIndex    = m_composedTextureUav.GetIndex();
         m_blitUniforms.samplerType = m_deferredTexture.GetSamplerType();
     }
@@ -384,7 +444,20 @@ Renderer::Renderer(DXApp &app, const Camera &camera)
             )
         );
         m_passes.push_back(
-            std::make_unique<BlitPass>(m_app, "../Assets/Shaders/blit.json", m_deferredTexture, m_composedTexture, m_width, m_height, m_blitUniforms)
+            std::make_unique<TaaPass>(
+                m_app,
+                "../Assets/Shaders/taa.json",
+                m_taaTextures,
+                m_deferredTexture,
+                m_gbufferTextures[shader_io::kVelocityBufferIndex],
+                m_deferredTexture,
+                m_width,
+                m_height,
+                m_taaUniforms
+            )
+        );
+        m_passes.push_back(
+            std::make_unique<BlitPass>(m_app, "../Assets/Shaders/blit.json", m_taaTextures, m_composedTexture, m_width, m_height, m_blitUniforms)
         );
     }
 }
@@ -477,14 +550,14 @@ void Renderer::Update(const FrameInfo &frameInfo) {
         m_lastFrameTickCount = now.time_since_epoch().count();
     }
 
-    const uint32_t lastFrameIndex = frameIndex > 0 ? frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
+    const uint32_t prevFrameIndex = frameIndex > 0 ? frameIndex - 1 : DXApp::kMaxFramesInFlight - 1;
 
-    const DirectX::XMFLOAT4X4 viewFloat = m_camera.GetViewMatrix();
-    const DirectX::XMFLOAT4X4 projFloat = m_camera.GetProjectionMatrix();
-    const DirectX::XMMATRIX   view      = DirectX::XMLoadFloat4x4(&viewFloat);
-    const DirectX::XMMATRIX   proj      = DirectX::XMLoadFloat4x4(&projFloat);
-    const DirectX::XMMATRIX   viewProj  = DirectX::XMMatrixMultiply(view, proj);
-    m_globalUniforms[frameIndex].prevViewProj = m_globalUniforms[lastFrameIndex].viewProj;
+    const DirectX::XMFLOAT4X4 viewFloat       = m_camera.GetViewMatrix();
+    const DirectX::XMFLOAT4X4 projFloat       = m_camera.GetProjectionMatrix();
+    const DirectX::XMMATRIX   view            = DirectX::XMLoadFloat4x4(&viewFloat);
+    const DirectX::XMMATRIX   proj            = DirectX::XMLoadFloat4x4(&projFloat);
+    const DirectX::XMMATRIX   viewProj        = DirectX::XMMatrixMultiply(view, proj);
+    m_globalUniforms[frameIndex].prevViewProj = m_globalUniforms[prevFrameIndex].viewProj;
     DirectX::XMStoreFloat4x4(&m_globalUniforms[frameIndex].viewProj, viewProj);
 
     DirectX::XMMATRIX viewNoTrans = view;
@@ -507,6 +580,16 @@ void Renderer::Update(const FrameInfo &frameInfo) {
         XMStoreFloat4x4(&m_lightSpaceMatrix, lightViewProj);
         m_deferredUniforms.lightSpaceMatrix = m_lightSpaceMatrix;
     }
+
+    // TAA uniforms
+    m_taaUniforms.srcIndex            = m_deferredTextureSrv.GetIndex();
+    m_taaUniforms.prevTaaResultIndex  = m_taaTextureSrvs[prevFrameIndex].GetIndex();
+    m_taaUniforms.velocityBufferIndex = m_gbufferSrvs[shader_io::kVelocityBufferIndex].GetIndex();
+    m_taaUniforms.depthBufferIndex    = m_depthTextureSrv.GetIndex();
+    m_taaUniforms.dstIndex            = m_taaTextureUavs[frameIndex].GetIndex();
+
+    // Blit uniforms
+    m_blitUniforms.srcIndex = m_taaTextureSrvs[frameIndex].GetIndex();
 }
 
 void Renderer::BuildImGuiContent() {

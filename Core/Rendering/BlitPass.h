@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <span>
+
 #include "DXApp.h"
 #include "DXTexture.h"
 #include "Pass.h"
@@ -13,13 +15,13 @@
 class BlitPass : public Pass {
 public:
     BlitPass(
-        DXApp                          &dxApp,
-        std::string_view                inputFile,
-        const DXTexture                &deferredTexture,
-        const DXTexture                &composedTexture,
-        uint32_t                        width,
-        uint32_t                        height,
-        const shader_io::BlitUniforms  &blitUniforms
+        DXApp                         &dxApp,
+        std::string_view               inputFile,
+        std::span<const DXTexture>     taaTextures,
+        const DXTexture               &composedTexture,
+        uint32_t                       width,
+        uint32_t                       height,
+        const shader_io::BlitUniforms &blitUniforms
     );
 
 protected:
@@ -28,7 +30,7 @@ protected:
     void Record(const DrawContext &context) override;
 
 private:
-    const DXTexture               &m_deferredTexture;
+    std::span<const DXTexture>     m_taaTextures;
     const DXTexture               &m_composedTexture;
     uint32_t                       m_width;
     uint32_t                       m_height;

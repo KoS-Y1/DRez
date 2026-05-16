@@ -33,7 +33,7 @@ public:
     Renderer(Renderer &&)                 = delete;
     Renderer &operator=(Renderer &&)      = delete;
 
-    ~Renderer() ;
+    ~Renderer();
 
     void Render();
 
@@ -56,16 +56,15 @@ private:
     shader_io::DeferredUniforms                                      m_deferredUniforms{};
     shader_io::SkyboxUniforms                                        m_skyboxUniforms{};
     shader_io::BlitUniforms                                          m_blitUniforms{};
+    shader_io::TaaUniforms                                           m_taaUniforms{};
 
-    DXBuffer m_skyboxVertexBuffer{};
+    DXBuffer                 m_skyboxVertexBuffer{};
     D3D12_VERTEX_BUFFER_VIEW m_skyboxVertexBufferView{};
 
-    DXTexture             m_composedTexture{};
-    DXUnorderedAccessView m_composedTextureUav{};
-    int32_t               m_composedTextureRtvOffset{};
 
     DXTexture m_depthTexture{};
     int32_t   m_depthTextureDsvOffset{};
+    DXShaderResourceView m_depthTextureSrv{};
 
     // Shadow map
     static constexpr uint32_t kShadowMapSize = 2048;
@@ -79,7 +78,7 @@ private:
     std::vector<int32_t>              m_gbufferRtvOffsets{};
     std::vector<DXShaderResourceView> m_gbufferSrvs{};
 
-    // Deferred composited (HDR) target
+    // Deferred (HDR) target
     DXTexture             m_deferredTexture{};
     DXShaderResourceView  m_deferredTextureSrv{};
     DXUnorderedAccessView m_deferredTextureUav{};
@@ -88,6 +87,16 @@ private:
     // Deferred bindless info buffer
     DXBuffer             m_deferredInfoBuffer{};
     DXShaderResourceView m_deferredInfoBufferSrv{};
+
+    // TAA target
+    std::array<DXTexture, DXApp::kMaxFramesInFlight>             m_taaTextures{};
+    std::array<DXShaderResourceView, DXApp::kMaxFramesInFlight>  m_taaTextureSrvs{};
+    std::array<DXUnorderedAccessView, DXApp::kMaxFramesInFlight> m_taaTextureUavs{};
+
+    // Composed target
+    DXTexture             m_composedTexture{};
+    DXUnorderedAccessView m_composedTextureUav{};
+    int32_t               m_composedTextureRtvOffset{};
 
     // Passes (executed in vector order each frame)
     std::vector<std::unique_ptr<Pass>> m_passes;

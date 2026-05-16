@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <vector>
+#include <span>
 
 #include "DXApp.h"
 #include "DXTexture.h"
@@ -15,13 +15,13 @@
 class DeferredPass : public Pass {
 public:
     DeferredPass(
-        DXApp                              &dxApp,
-        std::string_view                    inputFile,
-        const std::vector<DXTexture>       &gbufferTextures,
-        const DXTexture                    &deferredTexture,
-        uint32_t                            width,
-        uint32_t                            height,
-        const shader_io::DeferredUniforms  &deferredUniforms
+        DXApp                             &dxApp,
+        std::string_view                   inputFile,
+        std::span<const DXTexture>         gbufferTextures,
+        const DXTexture                   &deferredTexture,
+        uint32_t                           width,
+        uint32_t                           height,
+        const shader_io::DeferredUniforms &deferredUniforms
     );
 
 protected:
@@ -30,7 +30,7 @@ protected:
     void Record(const DrawContext &context) override;
 
 private:
-    const std::vector<DXTexture>      &m_gbufferTextures;
+    std::span<const DXTexture>         m_gbufferTextures;
     const DXTexture                   &m_deferredTexture;
     uint32_t                           m_width;
     uint32_t                           m_height;

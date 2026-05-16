@@ -12,20 +12,21 @@
 #include <directx/d3dx12_barriers.h>
 
 DeferredPass::DeferredPass(
-    DXApp                              &dxApp,
-    std::string_view                    inputFile,
-    const std::vector<DXTexture>       &gbufferTextures,
-    const DXTexture                    &deferredTexture,
-    uint32_t                            width,
-    uint32_t                            height,
-    const shader_io::DeferredUniforms  &deferredUniforms
+    DXApp                             &dxApp,
+    std::string_view                   inputFile,
+    std::span<const DXTexture>         gbufferTextures,
+    const DXTexture                   &deferredTexture,
+    uint32_t                           width,
+    uint32_t                           height,
+    const shader_io::DeferredUniforms &deferredUniforms
 )
     : Pass(dxApp, inputFile)
     , m_gbufferTextures(gbufferTextures)
     , m_deferredTexture(deferredTexture)
     , m_width(width)
     , m_height(height)
-    , m_deferredUniforms(deferredUniforms) {}
+    , m_deferredUniforms(deferredUniforms) {
+}
 
 void DeferredPass::TransitionBarriers(const DrawContext &context) {
     std::vector<CD3DX12_RESOURCE_BARRIER> barriers;

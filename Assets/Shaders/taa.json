@@ -1,0 +1,5 @@
+
+{
+    "shader": "../Assets/Shaders/taa.slang",
+    "name": "taa"
+}

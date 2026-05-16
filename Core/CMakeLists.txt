@@ -80,6 +80,8 @@ add_library(Rendering
         Rendering/SkyboxPass.h
         Rendering/BlitPass.cpp
         Rendering/BlitPass.h
+        Rendering/TaaPass.cpp
+        Rendering/TaaPass.h
 )
 target_include_directories(Rendering PUBLIC Rendering)
 target_link_libraries(Rendering PUBLIC

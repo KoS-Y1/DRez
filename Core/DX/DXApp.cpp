@@ -324,11 +324,6 @@ void DXApp::CreateRenderTargetView(ID3D12Resource *resource, const int32_t index
     m_device->CreateRenderTargetView(resource, nullptr, rtvHandle);
 }
 
-void DXApp::CreateDepthStencilView(ID3D12Resource *resource, const int32_t index) {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetDepthStencilViewHandle(index);
-    m_device->CreateDepthStencilView(resource, nullptr, dsvHandle);
-}
-
 void DXApp::CreateDepthStencilView(ID3D12Resource *resource, const int32_t index, const D3D12_DEPTH_STENCIL_VIEW_DESC &desc) {
     CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetDepthStencilViewHandle(index);
     m_device->CreateDepthStencilView(resource, &desc, dsvHandle);
