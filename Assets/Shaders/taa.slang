@@ -6,22 +6,20 @@ ConstantBuffer<shader_io::TaaUniforms> pushConstants;
 SamplerState gNearest : register(s0);
 SamplerState gLinear : register(s1);
 
+static const uint32_t kSharedDataX = shader_io::kTaaThreadX + 2;
+static const uint32_t kSharedDataY = shader_io::kTaaThreadX + 2;
+
+// (r, g, b) src data; w depth data
+groupshared float4 sharedData[kSharedDataX * kSharedDataY];
+
 [shader("compute")]
 [numthreads(shader_io::kTaaThreadX, shader_io::kTaaThreadY, 1)]
-void computeMain(uint3 threadId: SV_DispatchThreadID)
+void computeMain(uint3 threadId: SV_DispatchThreadID, uint3 groupId: SV_GroupID, uint3 groupThreadId: SV_GroupThreadID,
+                 uint groupIndex: SV_GroupIndex)
 {
     const uint2 px = threadId.xy;
 
     RWTexture2D<float4> dst = DescriptorHandle<RWTexture2D<float4>>(uint2(pushConstants.dstIndex, 0));
-
-    uint width = 0;
-    uint height = 0;
-    dst.GetDimensions(width, height);
-
-    if (px.x >= width || px.y >= height)
-    {
-        return;
-    }
 
     const Texture2D<float4> src = DescriptorHandle<Texture2D<float4>>(uint2(pushConstants.srcIndex, 0));
     const Texture2D<float4> prevTaaResult =
@@ -29,7 +27,27 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     const Texture2D<float2> velocityBuffer =
         DescriptorHandle<Texture2D<float2>>(uint2(pushConstants.velocityBufferIndex, 0));
     const Texture2D<float> depthBuffer = DescriptorHandle<Texture2D<float>>(uint2(pushConstants.depthBufferIndex, 0));
-    // Resolve
+
+    uint width = 0;
+    uint height = 0;
+    dst.GetDimensions(width, height);
+
+    // Load to LSD
+    const int2 tileOrigin = int2(groupId.xy) * int2(shader_io::kTaaThreadX, shader_io::kTaaThreadY) - 1;
+    for (uint i = groupIndex; i < kSharedDataX * kSharedDataY; i += shader_io::kTaaThreadX * shader_io::kTaaThreadY)
+    {
+        const int2 localPx = tileOrigin + int2(i % kSharedDataX, i / kSharedDataX);
+        const int2 samplePx = clamp(localPx, 0, int2(width - 1, height - 1));
+        sharedData[i] = float4(max(0.0f, src[samplePx].rgb), depthBuffer[samplePx]);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    if (px.x >= width || px.y >= height)
+    {
+        return;
+    }
+
     float3 srcSampleTotal = float3(0.0f);
     float srcSampleWeight = 0.0f;
     float3 neighborhoodMin = float3(10000.0f);
@@ -39,15 +57,17 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
     float closestDepth = 1.0f;
     int2 closestDepthPixelPos = int2(0, 0);
 
+    const int2 center = int2(groupThreadId.xy) + 1;
     [ForceUnroll]
     for (int xx = -1; xx <= 1; ++xx)
     {
         for (int yy = -1; yy <= 1; ++yy)
         {
-            int2 curPx = px + int2(xx, yy);
-            curPx = clamp(curPx, 0, int2(width - 1, height - 1));
+            const int2 localPx = center + int2(xx, yy);
+            const uint idx = uint(localPx.y) * kSharedDataX + uint(localPx.x);
+            const float4 cell = sharedData[idx];
 
-            const float3 neighbor = max(0, src[curPx].rgb);
+            const float3 neighbor = max(0, cell.rgb);
             const float subSampleDistance = length(float2(xx, yy));
             const float subSampleWeight = FilterMitchell1D(subSampleDistance);
 
@@ -60,11 +80,11 @@ void computeMain(uint3 threadId: SV_DispatchThreadID)
             m1 += neighbor;
             m2 += neighbor * neighbor;
 
-            const float curDepth = depthBuffer[curPx];
+            const float curDepth = cell.a;
             if (curDepth < closestDepth)
             {
                 closestDepth = curDepth;
-                closestDepthPixelPos = curPx;
+                closestDepthPixelPos = clamp(tileOrigin + localPx, 0, int2(width - 1, height - 1));
             }
         }
     }

@@ -119,3 +119,4 @@ private:
     float                                m_lastFrameTimeMs{};
     int64_t                              m_lastFrameTickCount{};
 };
+
