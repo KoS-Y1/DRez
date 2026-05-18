@@ -52,7 +52,7 @@ void GbufferPass::BindResources(const DrawContext &context) {
     const CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_app.GetDepthStencilViewHandle(m_depthDsvOffset);
     context.commandList->OMSetRenderTargets(rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
 
-    static constexpr float rtvClearColor[]{1.0f, 0.0f, 0.0f, 1.0f};
+    static constexpr float rtvClearColor[]{0.0f, 0.0f, 0.0f, 0.0f};
     std::ranges::for_each(rtvHandles, [&](const CD3DX12_CPU_DESCRIPTOR_HANDLE &handle) {
         context.commandList->ClearRenderTargetView(handle, rtvClearColor, 0, nullptr);
     });
